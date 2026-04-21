@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>納品書 | 磯屋コマース</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --strong: #111827;
+      --accent: #0f766e;
+      --accent-soft: #ecfeff;
+      --danger: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+      line-height: 1.55;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 20px 14px 60px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .sheet {
+      background: var(--card);
+      border: 1px solid #e5e7eb;
+      border-radius: 18px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+
+    .sheet-inner {
+      padding: 28px 22px 30px;
+    }
+
+    .head {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 24px;
+      align-items: start;
+      border-bottom: 2px solid #111827;
+      padding-bottom: 18px;
+      margin-bottom: 22px;
+    }
+
+    .title-box h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      letter-spacing: 0.2em;
+      color: var(--strong);
+    }
+
+    .title-box .sub {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .meta-box {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px 10px;
+      font-size: 14px;
+      align-content: start;
+    }
+
+    .meta-box .label {
+      color: var(--muted);
+    }
+
+    .meta-box .value {
+      color: var(--strong);
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .badge.issued {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .badge.signed {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .badge.warn {
+      background: #fff7ed;
+      color: #c2410c;
+    }
+
+    .parties {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+      min-height: 160px;
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .party-name {
+      font-size: 21px;
+      font-weight: 700;
+      color: var(--strong);
+      margin-bottom: 8px;
+    }
+
+    .panel .line {
+      font-size: 14px;
+      margin: 3px 0;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .message {
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .message strong {
+      color: #1e3a8a;
+    }
+
+    .items-box {
+      margin-bottom: 22px;
+    }
+
+    .items-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .items-title h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px 10px;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    th {
+      text-align: left;
+      background: #f9fafb;
+      color: #374151;
+      font-weight: 700;
+    }
+
+    td.num,
+    th.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .totals {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    .total-box {
+      width: 100%;
+      max-width: 360px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .total-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      padding: 12px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+    }
+
+    .total-row:last-child {
+      border-bottom: none;
+    }
+
+    .total-row strong {
+      font-size: 18px;
+      color: var(--strong);
+    }
+
+    .remarks {
+      margin-top: 22px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+    }
+
+    .remarks h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .remarks p {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+
+    .receipt {
+      margin-top: 22px;
+      border: 1px solid #bbf7d0;
+      background: #f0fdf4;
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .receipt h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: #166534;
+    }
+
+    .receipt-grid {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 8px 10px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .receipt-grid .label {
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .signature-box {
+      margin-top: 10px;
+      border: 1px dashed #86efac;
+      border-radius: 12px;
+      background: #fff;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .signature-box img {
+      max-width: 100%;
+      max-height: 140px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .footer-note {
+      margin-top: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .loading,
+    .error {
+      padding: 40px 18px;
+      text-align: center;
+      font-size: 15px;
+    }
+
+    .error {
+      color: var(--danger);
+    }
+
+    @media (max-width: 760px) {
+      .wrap {
+        padding: 12px 10px 40px;
+      }
+
+      .sheet-inner {
+        padding: 18px 14px 22px;
+      }
+
+      .head,
+      .parties {
+        grid-template-columns: 1fr;
+      }
+
+      .title-box h1 {
+        font-size: 28px;
+        letter-spacing: 0.14em;
+      }
+
+      .party-name {
+        font-size: 18px;
+      }
+
+      th, td {
+        font-size: 13px;
+        padding: 10px 8px;
+      }
+
+      .receipt-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .wrap {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .topbar {
+        display: none;
+      }
+
+      .sheet {
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+      }
+
+      .sheet-inner {
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <button class="btn" onclick="window.history.back()">戻る</button>
+      <button class="btn primary" onclick="window.print()">印刷</button>
+    </div>
+
+    <div class="sheet">
+      <div class="sheet-inner" id="app">
+        <div class="loading">読み込み中です…</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPPLIER = {
+      companyName: '合同会社 磯屋コマース',
+      zip: '〒000-0000',
+      address1: '愛知県〇〇市〇〇',
+      address2: '',
+      phone: '000-0000-0000',
+      memo: 'この納品書はシステムにより発行されています。'
+    };
+
+    function ymdJa(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return v;
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      return `${y}年${m}月${day}日`;
+    }
+
+    function dtJa(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return v;
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${y}年${m}月${day}日 ${hh}:${mm}`;
+    }
+
+    function yen(v) {
+      return `¥${Number(v || 0).toLocaleString('ja-JP')}`;
+    }
+
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function statusBadge(status) {
+      if (status === 'signed') {
+        return `<span class="badge signed">受領サイン済み</span>`;
+      }
+      if (status === 'issued') {
+        return `<span class="badge issued">発行済み</span>`;
+      }
+      return `<span class="badge warn">${esc(status || '未設定')}</span>`;
+    }
+
+    function buildCustomerAddress(note) {
+      return [note.zip, note.pref, note.city, note.addr1, note.addr2].filter(Boolean).join(' ');
+    }
+
+    function render(data) {
+      const app = document.getElementById('app');
+      const note = data.delivery_note || {};
+      const items = data.items || [];
+      const receipt = data.receipt || null;
+
+      const customerAddress = buildCustomerAddress(note);
+
+      const rows = items.map((item, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${esc(item.product_name)}</td>
+          <td class="num">${Number(item.quantity || 0).toLocaleString('ja-JP')}</td>
+          <td>${esc(item.unit || '')}</td>
+          <td class="num">${yen(item.unit_price)}</td>
+          <td class="num">${yen(item.line_amount)}</td>
+        </tr>
+      `).join('');
+
+      app.innerHTML = `
+        <div class="head">
+          <div class="title-box">
+            <h1>納品書</h1>
+            <div class="sub">Delivery Note</div>
+          </div>
+          <div class="meta-box">
+            <div class="label">納品書番号</div>
+            <div class="value">${esc(note.delivery_note_no || '')}</div>
+
+            <div class="label">発行日</div>
+            <div class="value">${ymdJa(note.issue_date)}</div>
+
+            <div class="label">納品日</div>
+            <div class="value">${ymdJa(note.delivery_date)}</div>
+
+            <div class="label">ステータス</div>
+            <div class="value">${esc(note.status || '')}</div>
+          </div>
+        </div>
+
+        <div class="status-row">
+          ${statusBadge(note.status)}
+        </div>
+
+        <div class="message">
+          <strong>${esc(note.customer_name || 'お取引先様')}</strong> への納品内容です。内容をご確認ください。
+        </div>
+
+        <div class="parties">
+          <section class="panel">
+            <h2>納品先</h2>
+            <div class="party-name">${esc(note.customer_name || '')}</div>
+            ${note.contact_name ? `<div class="line">担当: ${esc(note.contact_name)}</div>` : ''}
+            ${customerAddress ? `<div class="line">${esc(customerAddress)}</div>` : ''}
+            ${note.phone ? `<div class="line">TEL: ${esc(note.phone)}</div>` : ''}
+            ${note.email ? `<div class="line">MAIL: ${esc(note.email)}</div>` : ''}
+          </section>
+
+          <section class="panel">
+            <h2>発行元</h2>
+            <div class="party-name">${esc(SUPPLIER.companyName)}</div>
+            ${SUPPLIER.zip ? `<div class="line">${esc(SUPPLIER.zip)}</div>` : ''}
+            ${SUPPLIER.address1 ? `<div class="line">${esc(SUPPLIER.address1)}</div>` : ''}
+            ${SUPPLIER.address2 ? `<div class="line">${esc(SUPPLIER.address2)}</div>` : ''}
+            ${SUPPLIER.phone ? `<div class="line">TEL: ${esc(SUPPLIER.phone)}</div>` : ''}
+          </section>
+        </div>
+
+        <section class="items-box">
+          <div class="items-title">
+            <h2>納品明細</h2>
+            <div>${items.length}件</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px;">No</th>
+                <th>品名</th>
+                <th class="num" style="width:100px;">数量</th>
+                <th style="width:90px;">単位</th>
+                <th class="num" style="width:140px;">単価</th>
+                <th class="num" style="width:140px;">金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || `<tr><td colspan="6" style="text-align:center;">明細がありません</td></tr>`}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="total-box">
+              <div class="total-row">
+                <div>小計</div>
+                <div>${yen(note.subtotal)}</div>
+              </div>
+              <div class="total-row">
+                <div>消費税</div>
+                <div>${yen(note.tax_amount)}</div>
+              </div>
+              <div class="total-row">
+                <div><strong>合計</strong></div>
+                <div><strong>${yen(note.total_amount)}</strong></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="remarks">
+          <h2>備考</h2>
+          <p>${esc(note.memo || SUPPLIER.memo || '特記事項はありません。')}</p>
+        </section>
+
+        ${receipt ? `
+          <section class="receipt">
+            <h2>受領情報</h2>
+            <div class="receipt-grid">
+              <div class="label">受領者</div>
+              <div>${esc(receipt.received_by || '')}</div>
+
+              <div class="label">署名者名</div>
+              <div>${esc(receipt.signer_name || '')}</div>
+
+              <div class="label">受領日時</div>
+              <div>${dtJa(receipt.received_at)}</div>
+            </div>
+
+            ${receipt.signature_image_url ? `
+              <div class="signature-box">
+                <img src="${esc(receipt.signature_image_url)}" alt="受領サイン" />
+              </div>
+            ` : ''}
+          </section>
+        ` : ''}
+
+        <div class="footer-note">
+          ${esc(SUPPLIER.companyName)} / ${esc(SUPPLIER.memo || '')}
+        </div>
+      `;
+    }
+
+    async function boot() {
+      const app = document.getElementById('app');
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      const id = params.get('id');
+
+      try {
+        let url = '';
+
+        if (token) {
+          url = `/api/dn/delivery-notes/view/${encodeURIComponent(token)}`;
+        } else if (id) {
+          url = `/api/dn/delivery-notes/${encodeURIComponent(id)}`;
+        } else {
+          app.innerHTML = `<div class="error">token または id が必要です。</div>`;
+          return;
+        }
+
+        const res = await fetch(url, { cache: 'no-store' });
+        const json = await res.json();
+
+        if (!res.ok || !json.ok) {
+          throw new Error(json.error || 'load_failed');
+        }
+
+        render(json);
+      } catch (err) {
+        console.error(err);
+        app.innerHTML = `<div class="error">納品書を表示できませんでした。</div>`;
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>
