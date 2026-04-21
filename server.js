@@ -8,616 +8,856 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
-const APP_BASE_URL = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
-const COMPANY_NAME = process.env.COMPANY_NAME || '合同会社 磯屋コマース';
 
+const DATABASE_URL = process.env.DATABASE_URL;
+const PORT = Number(process.env.PORT || 3000);
+
+// Render の External PostgreSQL は SSL 必須になりやすい。
+// Internal DB の場合も rejectUnauthorized=false で通す。
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-function nowJstDateString() {
+/* =========================
+   Helpers
+========================= */
+
+function todayYmd() {
   const d = new Date();
-  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  return jst.toISOString().slice(0, 10).replace(/-/g, '');
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}`;
 }
 
-function makeToken(size = 24) {
-  return crypto.randomBytes(size).toString('hex');
-}
-
-function escapeHtml(v) {
-  return String(v ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function parseBasicAuth(header = '') {
-  if (!header.startsWith('Basic ')) return null;
-  const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
-  const idx = decoded.indexOf(':');
-  if (idx === -1) return null;
-  return { user: decoded.slice(0, idx), pass: decoded.slice(idx + 1) };
-}
-
-function requireAdmin(req, res, next) {
-  const auth = parseBasicAuth(req.headers.authorization || '');
-  const ok = auth && auth.user === process.env.ADMIN_BASIC_USER && auth.pass === process.env.ADMIN_BASIC_PASS;
-  if (ok) return next();
-  res.setHeader('WWW-Authenticate', 'Basic realm="delivery-admin"');
-  return res.status(401).json({ ok: false, error: 'admin auth required' });
-}
-
-async function nextRunningNo(prefix, client, table, column) {
-  const today = nowJstDateString();
-  const base = `${prefix}-${today}`;
-  const { rows } = await client.query(
-    `select count(*)::int as cnt from ${table} where ${column} like $1`,
-    [`${base}-%`]
-  );
-  const seq = String((rows[0]?.cnt || 0) + 1).padStart(4, '0');
-  return `${base}-${seq}`;
+function randomToken(len = 32) {
+  return crypto.randomBytes(len).toString('hex');
 }
 
 function calcAmounts(items) {
   let subtotal = 0;
   let taxAmount = 0;
-  const normalized = items.map((item) => {
-    const quantity = Number(item.quantity || 0);
-    const unitPrice = Number(item.unit_price || item.unitPrice || 0);
-    const taxRate = Number(item.tax_rate || item.taxRate || 8);
-    const lineAmount = Number((quantity * unitPrice).toFixed(2));
-    const lineTax = Number((lineAmount * (taxRate / 100)).toFixed(2));
+
+  for (const item of items) {
+    const qty = Number(item.quantity || 0);
+    const unitPrice = Number(item.unit_price || 0);
+    const taxRate = Number(item.tax_rate ?? 8.0);
+
+    const lineAmount = Math.round(qty * unitPrice);
+    const lineTax = Math.round(lineAmount * (taxRate / 100));
+
     subtotal += lineAmount;
     taxAmount += lineTax;
-    return {
-      product_id: item.product_id || null,
-      product_code: item.product_code || item.productCode || '',
-      product_name: item.product_name || item.productName || '',
-      unit: item.unit || '袋',
-      quantity,
-      unit_price: unitPrice,
-      tax_rate: taxRate,
-      line_amount: lineAmount,
-    };
-  });
+  }
+
   return {
-    items: normalized,
-    subtotal: Number(subtotal.toFixed(2)),
-    taxAmount: Number(taxAmount.toFixed(2)),
-    totalAmount: Number((subtotal + taxAmount).toFixed(2)),
+    subtotal,
+    taxAmount,
+    totalAmount: subtotal + taxAmount,
   };
 }
 
-async function logEvent(client, deliveryNoteId, eventType, actorType, actorId, detail = {}) {
+async function nextSeq(prefix) {
+  const ymd = todayYmd();
+  const likeValue = `${prefix}-${ymd}-%`;
+
+  const sql = `
+    SELECT delivery_note_no AS no
+    FROM dn_delivery_notes
+    WHERE delivery_note_no LIKE $1
+    UNION ALL
+    SELECT order_no AS no
+    FROM dn_orders
+    WHERE order_no LIKE $1
+  `;
+  const { rows } = await pool.query(sql, [likeValue]);
+
+  let max = 0;
+  for (const r of rows) {
+    const no = String(r.no || '');
+    const last = no.split('-').pop();
+    const n = Number(last);
+    if (!Number.isNaN(n) && n > max) max = n;
+  }
+  return String(max + 1).padStart(4, '0');
+}
+
+async function generateOrderNo() {
+  const seq = await nextSeq('DNO');
+  return `DNO-${todayYmd()}-${seq}`;
+}
+
+async function generateDeliveryNoteNo() {
+  const seq = await nextSeq('DND');
+  return `DND-${todayYmd()}-${seq}`;
+}
+
+async function logDnEvent(client, deliveryNoteId, eventType, actorType, actorId, detail) {
   await client.query(
-    `insert into delivery_events (delivery_note_id, event_type, actor_type, actor_id, detail)
-     values ($1, $2, $3, $4, $5::jsonb)`,
-    [deliveryNoteId, eventType, actorType, actorId || null, JSON.stringify(detail || {})]
+    `
+      INSERT INTO dn_delivery_events
+      (delivery_note_id, event_type, actor_type, actor_id, detail)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [deliveryNoteId, eventType, actorType, actorId || null, detail ? JSON.stringify(detail) : null]
   );
 }
 
-async function getOrderById(orderId) {
-  const orderQ = await pool.query(
-    `select o.*, c.customer_code, c.name as customer_name, c.contact_name, c.phone, c.email,
-            c.pref, c.city, c.addr1, c.addr2
-       from orders o
-       join customers c on c.id = o.customer_id
-      where o.id = $1`,
-    [orderId]
-  );
-  if (!orderQ.rowCount) return null;
-  const itemsQ = await pool.query(
-    `select * from order_items where order_id = $1 order by id`,
-    [orderId]
-  );
-  return { ...orderQ.rows[0], items: itemsQ.rows };
+function badRequest(res, message) {
+  return res.status(400).json({ ok: false, error: message });
 }
 
-async function getDeliveryNoteFullById(deliveryNoteId) {
-  const noteQ = await pool.query(
-    `select dn.*, c.customer_code, c.name as customer_name, c.contact_name, c.phone, c.email,
-            c.pref, c.city, c.addr1, c.addr2, o.order_no
-       from delivery_notes dn
-       join customers c on c.id = dn.customer_id
-  left join orders o on o.id = dn.order_id
-      where dn.id = $1`,
-    [deliveryNoteId]
-  );
-  if (!noteQ.rowCount) return null;
-  const itemsQ = await pool.query(
-    `select * from delivery_note_items where delivery_note_id = $1 order by id`,
-    [deliveryNoteId]
-  );
-  const receiptQ = await pool.query(
-    `select * from delivery_receipts where delivery_note_id = $1`,
-    [deliveryNoteId]
-  );
-  return {
-    ...noteQ.rows[0],
-    items: itemsQ.rows,
-    receipt: receiptQ.rows[0] || null,
-    view_url: `${APP_BASE_URL}/view/${noteQ.rows[0].view_token}`,
-    sign_url: `${APP_BASE_URL}/sign/${noteQ.rows[0].view_token}`,
-  };
-}
+/* =========================
+   Health
+========================= */
 
-function deliveryNoteHtml(doc) {
-  const itemRows = doc.items.map((it, idx) => `
-    <tr>
-      <td>${idx + 1}</td>
-      <td>${escapeHtml(it.product_code || '')}</td>
-      <td>${escapeHtml(it.product_name)}</td>
-      <td class="num">${Number(it.quantity).toLocaleString('ja-JP')}</td>
-      <td>${escapeHtml(it.unit)}</td>
-      <td class="num">${Number(it.unit_price).toLocaleString('ja-JP')}</td>
-      <td class="num">${Number(it.line_amount).toLocaleString('ja-JP')}</td>
-    </tr>
-  `).join('');
-
-  const signBlock = doc.receipt?.signature_data_url
-    ? `<div class="sign-block"><div class="label">受領サイン</div><img src="${doc.receipt.signature_data_url}" alt="signature"></div>`
-    : '<div class="sign-block"><div class="label">受領サイン</div><div class="unsigned">未署名</div></div>';
-
-  return `<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>納品書 ${escapeHtml(doc.delivery_note_no)}</title>
-<style>
-body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7f7f8;margin:0;color:#222}
-.wrap{max-width:980px;margin:24px auto;background:#fff;padding:24px;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-.head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
-h1{margin:0;font-size:28px}
-.meta,.addr,.summary{font-size:14px;line-height:1.8}
-.table{width:100%;border-collapse:collapse;margin-top:20px}
-.table th,.table td{border:1px solid #ddd;padding:10px;font-size:14px}
-.table th{background:#f2f2f3}
-.num{text-align:right}
-.summary{margin-top:16px;display:grid;justify-content:end}
-.summary table{border-collapse:collapse;min-width:280px}
-.summary td{border:1px solid #ddd;padding:8px 10px}
-.sign-area{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;margin-top:24px;flex-wrap:wrap}
-.sign-block img{max-width:240px;border:1px solid #ddd;background:#fff}
-.unsigned{width:240px;height:100px;border:1px dashed #bbb;display:flex;align-items:center;justify-content:center;color:#777}
-.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
-.btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 16px;border-radius:10px;border:0;background:#111;color:#fff;text-decoration:none;cursor:pointer}
-.btn.secondary{background:#ececef;color:#111}
-.label{font-weight:700;margin-bottom:8px}
-.small{color:#666;font-size:12px}
-@media print {.actions{display:none} body{background:#fff} .wrap{box-shadow:none;margin:0;padding:0;border-radius:0}}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="head">
-    <div>
-      <div class="small">${escapeHtml(COMPANY_NAME)}</div>
-      <h1>納品書</h1>
-      <div class="meta">
-        納品書番号: ${escapeHtml(doc.delivery_note_no)}<br>
-        発行日: ${escapeHtml(doc.issue_date)}<br>
-        納品日: ${escapeHtml(doc.delivery_date || '')}<br>
-        注文番号: ${escapeHtml(doc.order_no || '')}
-      </div>
-    </div>
-    <div class="addr">
-      <strong>${escapeHtml(doc.customer_name)} 御中</strong><br>
-      担当: ${escapeHtml(doc.contact_name || '')}<br>
-      ${escapeHtml([doc.pref, doc.city, doc.addr1, doc.addr2].filter(Boolean).join(' '))}<br>
-      TEL: ${escapeHtml(doc.phone || '')}
-    </div>
-  </div>
-
-  <table class="table">
-    <thead>
-      <tr>
-        <th>#</th><th>商品コード</th><th>商品名</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th>
-      </tr>
-    </thead>
-    <tbody>${itemRows}</tbody>
-  </table>
-
-  <div class="summary">
-    <table>
-      <tr><td>小計</td><td class="num">${Number(doc.subtotal).toLocaleString('ja-JP')} 円</td></tr>
-      <tr><td>消費税</td><td class="num">${Number(doc.tax_amount).toLocaleString('ja-JP')} 円</td></tr>
-      <tr><td><strong>合計</strong></td><td class="num"><strong>${Number(doc.total_amount).toLocaleString('ja-JP')} 円</strong></td></tr>
-    </table>
-  </div>
-
-  <div class="sign-area">
-    <div>
-      <div class="label">備考</div>
-      <div>${escapeHtml(doc.memo || '') || '―'}</div>
-      <div class="small">状態: ${escapeHtml(doc.status)}</div>
-    </div>
-    <div>
-      <div class="label">受領者</div>
-      <div>${escapeHtml(doc.receipt?.received_by || doc.receipt?.signer_name || '未入力')}</div>
-      <div class="small">${escapeHtml(doc.receipt?.received_at || '')}</div>
-      ${signBlock}
-    </div>
-  </div>
-
-  <div class="actions">
-    <button class="btn" onclick="window.print()">印刷 / PDF保存</button>
-    <a class="btn secondary" href="/sign/${escapeHtml(doc.view_token)}">受領サイン</a>
-    <a class="btn secondary" href="/public/portal.html">履歴画面</a>
-  </div>
-</div>
-</body>
-</html>`;
-}
-
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
   try {
-    await pool.query('select 1');
-    res.json({ ok: true, app: 'delivery-note-system' });
+    const r = await pool.query('SELECT NOW() AS now');
+    res.json({ ok: true, now: r.rows[0].now });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'db_error' });
   }
 });
 
-app.get('/', (req, res) => {
-  res.redirect('/public/order.html');
+/* =========================
+   Customers
+========================= */
+
+app.get('/api/dn/customers', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT *
+      FROM dn_customers
+      ORDER BY id DESC
+    `);
+    res.json({ ok: true, customers: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'customers_list_failed' });
+  }
 });
 
-app.get('/view/:token', async (req, res) => {
-  const q = await pool.query('select id from delivery_notes where view_token = $1', [req.params.token]);
-  if (!q.rowCount) return res.status(404).send('not found');
-  const doc = await getDeliveryNoteFullById(q.rows[0].id);
-  await pool.query(
-    `insert into delivery_events (delivery_note_id, event_type, actor_type, actor_id, detail)
-     values ($1, 'viewed', 'customer', $2, $3::jsonb)`,
-    [doc.id, req.ip, JSON.stringify({ ip: req.ip, ua: req.headers['user-agent'] || '' })]
-  );
-  res.send(deliveryNoteHtml(doc));
+app.get('/api/dn/customers/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { rows } = await pool.query(
+      `SELECT * FROM dn_customers WHERE id = $1`,
+      [id]
+    );
+    if (!rows[0]) return res.status(404).json({ ok: false, error: 'customer_not_found' });
+    res.json({ ok: true, customer: rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'customer_get_failed' });
+  }
 });
 
-app.get('/sign/:token', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'sign.html'));
+app.post('/api/dn/customers', async (req, res) => {
+  try {
+    const {
+      customer_code,
+      name,
+      contact_name,
+      phone,
+      email,
+      zip,
+      pref,
+      city,
+      addr1,
+      addr2,
+    } = req.body || {};
+
+    if (!customer_code) return badRequest(res, 'customer_code is required');
+    if (!name) return badRequest(res, 'name is required');
+
+    const { rows } = await pool.query(
+      `
+        INSERT INTO dn_customers
+        (customer_code, name, contact_name, phone, email, zip, pref, city, addr1, addr2)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        RETURNING *
+      `,
+      [customer_code, name, contact_name || null, phone || null, email || null, zip || null, pref || null, city || null, addr1 || null, addr2 || null]
+    );
+
+    res.json({ ok: true, customer: rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'customer_create_failed', detail: e.message });
+  }
 });
 
-app.get('/api/customers', async (req, res) => {
-  const { rows } = await pool.query(
-    'select * from customers where is_active = true order by customer_code'
-  );
-  res.json({ ok: true, customers: rows });
+/* =========================
+   Products
+========================= */
+
+app.get('/api/dn/products', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT *
+      FROM dn_products
+      WHERE is_active = true
+      ORDER BY id DESC
+    `);
+    res.json({ ok: true, products: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'products_list_failed' });
+  }
 });
 
-app.get('/api/products', async (req, res) => {
-  const { rows } = await pool.query(
-    'select * from products where is_active = true order by product_code'
-  );
-  res.json({ ok: true, products: rows });
+app.post('/api/dn/products', async (req, res) => {
+  try {
+    const {
+      product_code,
+      name,
+      unit,
+      price,
+      tax_rate,
+      is_active,
+    } = req.body || {};
+
+    if (!product_code) return badRequest(res, 'product_code is required');
+    if (!name) return badRequest(res, 'name is required');
+
+    const { rows } = await pool.query(
+      `
+        INSERT INTO dn_products
+        (product_code, name, unit, price, tax_rate, is_active)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING *
+      `,
+      [
+        product_code,
+        name,
+        unit || '袋',
+        Number(price || 0),
+        Number(tax_rate ?? 8.0),
+        is_active === false ? false : true,
+      ]
+    );
+
+    res.json({ ok: true, product: rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'product_create_failed', detail: e.message });
+  }
 });
 
-app.post('/api/orders', async (req, res) => {
+/* =========================
+   Orders
+========================= */
+
+app.get('/api/dn/orders', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        o.*,
+        c.name AS customer_name
+      FROM dn_orders o
+      JOIN dn_customers c ON c.id = o.customer_id
+      ORDER BY o.id DESC
+    `);
+    res.json({ ok: true, orders: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'orders_list_failed' });
+  }
+});
+
+app.get('/api/dn/orders/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  try {
+    const orderRes = await pool.query(
+      `
+        SELECT
+          o.*,
+          c.name AS customer_name
+        FROM dn_orders o
+        JOIN dn_customers c ON c.id = o.customer_id
+        WHERE o.id = $1
+      `,
+      [id]
+    );
+
+    if (!orderRes.rows[0]) {
+      return res.status(404).json({ ok: false, error: 'order_not_found' });
+    }
+
+    const itemsRes = await pool.query(
+      `
+        SELECT *
+        FROM dn_order_items
+        WHERE order_id = $1
+        ORDER BY id ASC
+      `,
+      [id]
+    );
+
+    res.json({
+      ok: true,
+      order: orderRes.rows[0],
+      items: itemsRes.rows,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'order_get_failed' });
+  }
+});
+
+app.post('/api/dn/orders', async (req, res) => {
   const client = await pool.connect();
   try {
-    const { customer_code, order_date, delivery_date, memo, items } = req.body || {};
-    if (!customer_code) return res.status(400).json({ ok: false, error: 'customer_code required' });
-    if (!Array.isArray(items) || !items.length) return res.status(400).json({ ok: false, error: 'items required' });
+    const {
+      customer_id,
+      order_date,
+      delivery_date,
+      memo,
+      created_by,
+      items,
+    } = req.body || {};
 
-    await client.query('begin');
-    const cQ = await client.query('select * from customers where customer_code = $1 and is_active = true', [customer_code]);
-    if (!cQ.rowCount) throw new Error('customer not found');
+    if (!customer_id) return badRequest(res, 'customer_id is required');
+    if (!order_date) return badRequest(res, 'order_date is required');
+    if (!Array.isArray(items) || items.length === 0) {
+      return badRequest(res, 'items is required');
+    }
 
-    const orderNo = await nextRunningNo('OD', client, 'orders', 'order_no');
-    const amounts = calcAmounts(items);
+    await client.query('BEGIN');
 
-    const orderQ = await client.query(
-      `insert into orders (order_no, customer_id, order_date, delivery_date, status, memo)
-       values ($1, $2, $3, $4, 'confirmed', $5)
-       returning *`,
-      [orderNo, cQ.rows[0].id, order_date, delivery_date || null, memo || null]
+    const orderNo = await generateOrderNo();
+
+    const orderInsert = await client.query(
+      `
+        INSERT INTO dn_orders
+        (order_no, customer_id, order_date, delivery_date, status, memo, created_by)
+        VALUES ($1,$2,$3,$4,'draft',$5,$6)
+        RETURNING *
+      `,
+      [
+        orderNo,
+        Number(customer_id),
+        order_date,
+        delivery_date || null,
+        memo || null,
+        created_by || 'admin',
+      ]
     );
-    for (const item of amounts.items) {
+
+    const order = orderInsert.rows[0];
+
+    for (const item of items) {
+      const qty = Number(item.quantity || 0);
+      const unitPrice = Number(item.unit_price || 0);
+      const taxRate = Number(item.tax_rate ?? 8.0);
+      const lineAmount = Math.round(qty * unitPrice);
+
       await client.query(
-        `insert into order_items
-         (order_id, product_id, product_code, product_name, unit, quantity, unit_price, tax_rate, line_amount)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `
+          INSERT INTO dn_order_items
+          (order_id, product_id, product_code, product_name, unit, quantity, unit_price, tax_rate, line_amount)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        `,
         [
-          orderQ.rows[0].id,
-          item.product_id,
-          item.product_code,
+          order.id,
+          item.product_id ? Number(item.product_id) : null,
+          item.product_code || null,
           item.product_name,
-          item.unit,
-          item.quantity,
-          item.unit_price,
-          item.tax_rate,
-          item.line_amount,
+          item.unit || '袋',
+          qty,
+          unitPrice,
+          taxRate,
+          lineAmount,
         ]
       );
     }
-    await client.query('commit');
-    res.json({ ok: true, order_id: orderQ.rows[0].id, order_no: orderNo, amounts });
+
+    await client.query('COMMIT');
+
+    res.json({ ok: true, order });
   } catch (e) {
-    await client.query('rollback');
-    res.status(500).json({ ok: false, error: e.message });
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'order_create_failed', detail: e.message });
   } finally {
     client.release();
   }
 });
 
-app.get('/api/orders', requireAdmin, async (req, res) => {
-  const { rows } = await pool.query(
-    `select o.*, c.customer_code, c.name as customer_name
-       from orders o join customers c on c.id = o.customer_id
-      order by o.id desc limit 200`
-  );
-  res.json({ ok: true, orders: rows });
-});
+/* =========================
+   Delivery Notes
+========================= */
 
-app.get('/api/orders/:id', requireAdmin, async (req, res) => {
-  const order = await getOrderById(req.params.id);
-  if (!order) return res.status(404).json({ ok: false, error: 'order not found' });
-  res.json({ ok: true, order });
-});
-
-app.post('/api/delivery-notes/from-order/:orderId', requireAdmin, async (req, res) => {
-  const client = await pool.connect();
+app.get('/api/dn/delivery-notes', async (_req, res) => {
   try {
-    await client.query('begin');
-    const orderQ = await client.query('select * from orders where id = $1', [req.params.orderId]);
-    if (!orderQ.rowCount) throw new Error('order not found');
-    const order = orderQ.rows[0];
+    const { rows } = await pool.query(`
+      SELECT
+        dn.*,
+        c.name AS customer_name
+      FROM dn_delivery_notes dn
+      JOIN dn_customers c ON c.id = dn.customer_id
+      ORDER BY dn.id DESC
+    `);
+    res.json({ ok: true, delivery_notes: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'delivery_notes_list_failed' });
+  }
+});
 
-    const existsQ = await client.query('select id, delivery_note_no, view_token from delivery_notes where order_id = $1', [order.id]);
-    if (existsQ.rowCount) {
-      await client.query('rollback');
-      return res.json({
-        ok: true,
-        already_exists: true,
-        delivery_note_id: existsQ.rows[0].id,
-        delivery_note_no: existsQ.rows[0].delivery_note_no,
-        view_url: `${APP_BASE_URL}/view/${existsQ.rows[0].view_token}`,
-      });
+app.get('/api/dn/delivery-notes/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  try {
+    const noteRes = await pool.query(
+      `
+        SELECT
+          dn.*,
+          c.name AS customer_name,
+          c.contact_name,
+          c.phone,
+          c.email,
+          c.zip,
+          c.pref,
+          c.city,
+          c.addr1,
+          c.addr2
+        FROM dn_delivery_notes dn
+        JOIN dn_customers c ON c.id = dn.customer_id
+        WHERE dn.id = $1
+      `,
+      [id]
+    );
+
+    if (!noteRes.rows[0]) {
+      return res.status(404).json({ ok: false, error: 'delivery_note_not_found' });
     }
 
-    const itemsQ = await client.query('select * from order_items where order_id = $1 order by id', [order.id]);
-    const amounts = calcAmounts(itemsQ.rows);
-    const deliveryNoteNo = await nextRunningNo('DN', client, 'delivery_notes', 'delivery_note_no');
-    const viewToken = makeToken(16);
+    const itemsRes = await pool.query(
+      `
+        SELECT *
+        FROM dn_delivery_note_items
+        WHERE delivery_note_id = $1
+        ORDER BY id ASC
+      `,
+      [id]
+    );
 
-    const dnQ = await client.query(
-      `insert into delivery_notes
-       (delivery_note_no, order_id, customer_id, issue_date, delivery_date, status, subtotal, tax_amount, total_amount, view_token, memo)
-       values ($1,$2,$3,current_date,$4,'issued',$5,$6,$7,$8,$9)
-       returning *`,
+    const receiptRes = await pool.query(
+      `
+        SELECT *
+        FROM dn_delivery_receipts
+        WHERE delivery_note_id = $1
+      `,
+      [id]
+    );
+
+    const eventsRes = await pool.query(
+      `
+        SELECT *
+        FROM dn_delivery_events
+        WHERE delivery_note_id = $1
+        ORDER BY id ASC
+      `,
+      [id]
+    );
+
+    res.json({
+      ok: true,
+      delivery_note: noteRes.rows[0],
+      items: itemsRes.rows,
+      receipt: receiptRes.rows[0] || null,
+      events: eventsRes.rows,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'delivery_note_get_failed' });
+  }
+});
+
+app.get('/api/dn/delivery-notes/view/:token', async (req, res) => {
+  const token = req.params.token;
+
+  const client = await pool.connect();
+  try {
+    const noteRes = await client.query(
+      `
+        SELECT
+          dn.*,
+          c.name AS customer_name,
+          c.contact_name,
+          c.phone,
+          c.email,
+          c.zip,
+          c.pref,
+          c.city,
+          c.addr1,
+          c.addr2
+        FROM dn_delivery_notes dn
+        JOIN dn_customers c ON c.id = dn.customer_id
+        WHERE dn.view_token = $1
+      `,
+      [token]
+    );
+
+    if (!noteRes.rows[0]) {
+      return res.status(404).json({ ok: false, error: 'delivery_note_not_found' });
+    }
+
+    const note = noteRes.rows[0];
+
+    const itemsRes = await client.query(
+      `
+        SELECT *
+        FROM dn_delivery_note_items
+        WHERE delivery_note_id = $1
+        ORDER BY id ASC
+      `,
+      [note.id]
+    );
+
+    const receiptRes = await client.query(
+      `
+        SELECT *
+        FROM dn_delivery_receipts
+        WHERE delivery_note_id = $1
+      `,
+      [note.id]
+    );
+
+    await logDnEvent(client, note.id, 'viewed', 'customer', null, { token_view: true });
+
+    res.json({
+      ok: true,
+      delivery_note: note,
+      items: itemsRes.rows,
+      receipt: receiptRes.rows[0] || null,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'delivery_note_view_failed' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/dn/delivery-notes/from-order/:orderId', async (req, res) => {
+  const orderId = Number(req.params.orderId);
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const orderRes = await client.query(
+      `
+        SELECT *
+        FROM dn_orders
+        WHERE id = $1
+      `,
+      [orderId]
+    );
+
+    if (!orderRes.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'order_not_found' });
+    }
+
+    const order = orderRes.rows[0];
+
+    const itemsRes = await client.query(
+      `
+        SELECT *
+        FROM dn_order_items
+        WHERE order_id = $1
+        ORDER BY id ASC
+      `,
+      [orderId]
+    );
+
+    const items = itemsRes.rows;
+    if (items.length === 0) {
+      await client.query('ROLLBACK');
+      return badRequest(res, 'order_items_not_found');
+    }
+
+    const { subtotal, taxAmount, totalAmount } = calcAmounts(items);
+    const deliveryNoteNo = await generateDeliveryNoteNo();
+    const viewToken = randomToken(16);
+
+    const noteInsert = await client.query(
+      `
+        INSERT INTO dn_delivery_notes
+        (
+          delivery_note_no,
+          order_id,
+          customer_id,
+          issue_date,
+          delivery_date,
+          status,
+          subtotal,
+          tax_amount,
+          total_amount,
+          view_token,
+          memo
+        )
+        VALUES ($1,$2,$3,CURRENT_DATE,$4,'issued',$5,$6,$7,$8,$9)
+        RETURNING *
+      `,
       [
         deliveryNoteNo,
         order.id,
         order.customer_id,
         order.delivery_date || null,
-        amounts.subtotal,
-        amounts.taxAmount,
-        amounts.totalAmount,
+        subtotal,
+        taxAmount,
+        totalAmount,
         viewToken,
         order.memo || null,
       ]
     );
-    for (const item of amounts.items) {
+
+    const note = noteInsert.rows[0];
+
+    for (const item of items) {
       await client.query(
-        `insert into delivery_note_items
-         (delivery_note_id, product_code, product_name, unit, quantity, unit_price, tax_rate, line_amount)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        `
+          INSERT INTO dn_delivery_note_items
+          (
+            delivery_note_id,
+            product_code,
+            product_name,
+            unit,
+            quantity,
+            unit_price,
+            tax_rate,
+            line_amount
+          )
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        `,
         [
-          dnQ.rows[0].id,
-          item.product_code,
+          note.id,
+          item.product_code || null,
           item.product_name,
-          item.unit,
-          item.quantity,
-          item.unit_price,
-          item.tax_rate,
-          item.line_amount,
+          item.unit || '袋',
+          Number(item.quantity || 0),
+          Number(item.unit_price || 0),
+          Number(item.tax_rate ?? 8.0),
+          Number(item.line_amount || 0),
         ]
       );
     }
-    await logEvent(client, dnQ.rows[0].id, 'issued', 'admin', req.headers['x-admin-user'] || 'basic-auth', {
-      order_id: order.id,
-    });
-    await client.query("update orders set status = 'delivered', updated_at = now() where id = $1", [order.id]);
-    await client.query('commit');
 
-    res.json({
-      ok: true,
-      delivery_note_id: dnQ.rows[0].id,
-      delivery_note_no: dnQ.rows[0].delivery_note_no,
-      view_token: viewToken,
-      view_url: `${APP_BASE_URL}/view/${viewToken}`,
-      sign_url: `${APP_BASE_URL}/sign/${viewToken}`,
+    await client.query(
+      `
+        UPDATE dn_orders
+        SET status = 'confirmed', updated_at = now()
+        WHERE id = $1
+      `,
+      [order.id]
+    );
+
+    await logDnEvent(client, note.id, 'issued', 'admin', 'system', {
+      from_order_id: order.id,
+      delivery_note_no: note.delivery_note_no,
     });
+
+    await client.query('COMMIT');
+
+    res.json({ ok: true, delivery_note: note });
   } catch (e) {
-    await client.query('rollback');
-    res.status(500).json({ ok: false, error: e.message });
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'delivery_note_create_failed', detail: e.message });
   } finally {
     client.release();
   }
 });
 
-app.get('/api/delivery-notes', requireAdmin, async (req, res) => {
-  const { status } = req.query;
-  const params = [];
-  let where = '';
-  if (status) {
-    params.push(status);
-    where = 'where dn.status = $1';
-  }
-  const { rows } = await pool.query(
-    `select dn.*, c.customer_code, c.name as customer_name
-       from delivery_notes dn join customers c on c.id = dn.customer_id
-       ${where}
-      order by dn.id desc limit 200`,
-    params
-  );
-  res.json({ ok: true, delivery_notes: rows });
-});
+/* =========================
+   Sign / Receipt
+========================= */
 
-app.get('/api/delivery-notes/:id', async (req, res) => {
-  const auth = parseBasicAuth(req.headers.authorization || '');
-  const isAdmin = auth && auth.user === process.env.ADMIN_BASIC_USER && auth.pass === process.env.ADMIN_BASIC_PASS;
-  if (!isAdmin && req.query.public !== '1') return res.status(401).json({ ok: false, error: 'admin auth required' });
-  const doc = await getDeliveryNoteFullById(req.params.id);
-  if (!doc) return res.status(404).json({ ok: false, error: 'delivery note not found' });
-  res.json({ ok: true, delivery_note: doc });
-});
-
-app.get('/api/delivery-notes/view/:token', async (req, res) => {
-  const q = await pool.query('select id from delivery_notes where view_token = $1', [req.params.token]);
-  if (!q.rowCount) return res.status(404).json({ ok: false, error: 'not found' });
-  const doc = await getDeliveryNoteFullById(q.rows[0].id);
-  res.json({ ok: true, delivery_note: doc });
-});
-
-app.post('/api/delivery-notes/:id/sign', async (req, res) => {
+app.post('/api/dn/delivery-notes/:id/sign', async (req, res) => {
+  const id = Number(req.params.id);
   const client = await pool.connect();
+
   try {
-    const { received_by, signer_name, signature_data_url, token } = req.body || {};
-    if (!signature_data_url) return res.status(400).json({ ok: false, error: 'signature_data_url required' });
-
-    const dnQ = await client.query('select * from delivery_notes where id = $1', [req.params.id]);
-    if (!dnQ.rowCount) return res.status(404).json({ ok: false, error: 'delivery note not found' });
-    if (token && dnQ.rows[0].view_token !== token) return res.status(403).json({ ok: false, error: 'invalid token' });
-
-    await client.query('begin');
-    await client.query(
-      `insert into delivery_receipts
-       (delivery_note_id, received_by, signer_name, signature_data_url, signed_device, signed_ip, received_at)
-       values ($1,$2,$3,$4,$5,$6,now())
-       on conflict (delivery_note_id)
-       do update set received_by = excluded.received_by,
-                     signer_name = excluded.signer_name,
-                     signature_data_url = excluded.signature_data_url,
-                     signed_device = excluded.signed_device,
-                     signed_ip = excluded.signed_ip,
-                     received_at = now()`,
-      [
-        req.params.id,
-        received_by || signer_name || '',
-        signer_name || received_by || '',
-        signature_data_url,
-        req.headers['user-agent'] || '',
-        req.ip,
-      ]
-    );
-    await client.query(
-      `update delivery_notes set status = 'signed', updated_at = now() where id = $1`,
-      [req.params.id]
-    );
-    await logEvent(client, req.params.id, 'signed', token ? 'customer' : 'admin', req.ip, {
+    const {
       received_by,
       signer_name,
-      ip: req.ip,
+      signature_data_url,
+      signed_device,
+      signed_ip,
+    } = req.body || {};
+
+    if (!received_by) return badRequest(res, 'received_by is required');
+    if (!signer_name) return badRequest(res, 'signer_name is required');
+
+    await client.query('BEGIN');
+
+    const noteRes = await client.query(
+      `
+        SELECT *
+        FROM dn_delivery_notes
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    if (!noteRes.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'delivery_note_not_found' });
+    }
+
+    await client.query(
+      `
+        INSERT INTO dn_delivery_receipts
+        (
+          delivery_note_id,
+          received_by,
+          received_at,
+          signer_name,
+          signature_image_url,
+          signed_device,
+          signed_ip
+        )
+        VALUES ($1,$2,now(),$3,$4,$5,$6)
+        ON CONFLICT (delivery_note_id)
+        DO UPDATE SET
+          received_by = EXCLUDED.received_by,
+          received_at = EXCLUDED.received_at,
+          signer_name = EXCLUDED.signer_name,
+          signature_image_url = EXCLUDED.signature_image_url,
+          signed_device = EXCLUDED.signed_device,
+          signed_ip = EXCLUDED.signed_ip
+      `,
+      [
+        id,
+        received_by,
+        signer_name,
+        signature_data_url || null,
+        signed_device || req.get('user-agent') || null,
+        signed_ip || req.ip || null,
+      ]
+    );
+
+    await client.query(
+      `
+        UPDATE dn_delivery_notes
+        SET status = 'signed',
+            updated_at = now()
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    await logDnEvent(client, id, 'signed', 'customer', signer_name, {
+      received_by,
     });
-    await client.query('commit');
+
+    await client.query('COMMIT');
+
     res.json({ ok: true });
   } catch (e) {
-    await client.query('rollback');
-    res.status(500).json({ ok: false, error: e.message });
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'sign_failed', detail: e.message });
   } finally {
     client.release();
   }
 });
 
-app.get('/api/delivery-notes/:id/receipt', async (req, res) => {
-  const q = await pool.query('select * from delivery_receipts where delivery_note_id = $1', [req.params.id]);
-  res.json({ ok: true, receipt: q.rows[0] || null });
+/* =========================
+   Simple seed copy (optional)
+   既存 products を壊さず dn_products へコピー
+========================= */
+
+app.post('/api/dn/seed/products-from-main', async (_req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const src = await client.query(`
+      SELECT id, name, price
+      FROM products
+      WHERE active = true
+      ORDER BY sort_order NULLS LAST, id
+    `);
+
+    let inserted = 0;
+    for (const p of src.rows) {
+      const r = await client.query(
+        `
+          INSERT INTO dn_products
+          (product_code, name, unit, price, tax_rate, is_active)
+          VALUES ($1,$2,'袋',$3,8.00,true)
+          ON CONFLICT (product_code) DO NOTHING
+          RETURNING id
+        `,
+        [String(p.id), p.name, Number(p.price || 0)]
+      );
+      if (r.rows[0]) inserted++;
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true, inserted, total_source: src.rows.length });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ ok: false, error: 'seed_products_failed', detail: e.message });
+  } finally {
+    client.release();
+  }
 });
 
-app.get('/api/delivery-notes/:id/events', requireAdmin, async (req, res) => {
-  const q = await pool.query(
-    'select * from delivery_events where delivery_note_id = $1 order by id desc',
-    [req.params.id]
-  );
-  res.json({ ok: true, events: q.rows });
+/* =========================
+   Root
+========================= */
+
+app.get('/', (_req, res) => {
+  res.send(`
+    <html lang="ja">
+      <head>
+        <meta charset="utf-8" />
+        <title>dn system</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 16px; line-height: 1.6; }
+          code { background: #f4f4f4; padding: 2px 6px; border-radius: 6px; }
+          a { display: block; margin: 8px 0; }
+        </style>
+      </head>
+      <body>
+        <h1>dn system</h1>
+        <p>既存ミニアプリ本体とは分離された納品書システムです。</p>
+        <a href="/health">/health</a>
+        <a href="/api/dn/customers">/api/dn/customers</a>
+        <a href="/api/dn/products">/api/dn/products</a>
+        <a href="/api/dn/orders">/api/dn/orders</a>
+        <a href="/api/dn/delivery-notes">/api/dn/delivery-notes</a>
+      </body>
+    </html>
+  `);
 });
 
-app.get('/api/customer-portal/delivery-notes', async (req, res) => {
-  const customerCode = req.query.customer_code;
-  if (!customerCode) return res.status(400).json({ ok: false, error: 'customer_code required' });
-  const q = await pool.query(
-    `select dn.id, dn.delivery_note_no, dn.issue_date, dn.delivery_date, dn.status, dn.total_amount,
-            dn.view_token, c.customer_code, c.name as customer_name
-       from delivery_notes dn
-       join customers c on c.id = dn.customer_id
-      where c.customer_code = $1
-      order by dn.id desc limit 200`,
-    [customerCode]
-  );
-  const rows = q.rows.map((r) => ({
-    ...r,
-    view_url: `${APP_BASE_URL}/view/${r.view_token}`,
-    sign_url: `${APP_BASE_URL}/sign/${r.view_token}`,
-  }));
-  res.json({ ok: true, delivery_notes: rows });
-});
+/* =========================
+   Error
+========================= */
 
-app.get('/api/export/delivery-notes.csv', requireAdmin, async (req, res) => {
-  const from = req.query.from || '1900-01-01';
-  const to = req.query.to || '2999-12-31';
-  const q = await pool.query(
-    `select dn.delivery_note_no, dn.issue_date, dn.delivery_date, c.customer_code, c.name as customer_name,
-            i.product_code, i.product_name, i.quantity, i.unit, i.unit_price, i.line_amount, i.tax_rate
-       from delivery_notes dn
-       join customers c on c.id = dn.customer_id
-       join delivery_note_items i on i.delivery_note_id = dn.id
-      where dn.issue_date between $1 and $2
-      order by dn.id desc, i.id asc`,
-    [from, to]
-  );
-  const header = ['納品書番号','発行日','納品日','得意先コード','得意先名','商品コード','商品名','数量','単位','単価','金額','税率'];
-  const lines = [header.join(',')].concat(q.rows.map((r) => [
-    r.delivery_note_no, r.issue_date, r.delivery_date || '', r.customer_code, r.customer_name,
-    r.product_code || '', r.product_name, r.quantity, r.unit, r.unit_price, r.line_amount, r.tax_rate,
-  ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')));
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="delivery-notes.csv"');
-  res.send('\uFEFF' + lines.join('\n'));
-});
-
-app.get('/api/export/billing-summary.csv', requireAdmin, async (req, res) => {
-  const month = req.query.month;
-  if (!month) return res.status(400).json({ ok: false, error: 'month=YYYY-MM required' });
-  const q = await pool.query(
-    `select to_char(date_trunc('month', dn.issue_date), 'YYYY-MM') as billing_month,
-            c.customer_code, c.name as customer_name,
-            count(*)::int as delivery_count,
-            sum(dn.subtotal) as subtotal,
-            sum(dn.tax_amount) as tax_amount,
-            sum(dn.total_amount) as total_amount
-       from delivery_notes dn
-       join customers c on c.id = dn.customer_id
-      where to_char(dn.issue_date, 'YYYY-MM') = $1
-      group by 1,2,3
-      order by c.customer_code`,
-    [month]
-  );
-  const header = ['請求月','得意先コード','得意先名','納品件数','小計','税額','合計'];
-  const lines = [header.join(',')].concat(q.rows.map((r) => [
-    r.billing_month, r.customer_code, r.customer_name, r.delivery_count, r.subtotal, r.tax_amount, r.total_amount,
-  ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')));
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="billing-summary.csv"');
-  res.send('\uFEFF' + lines.join('\n'));
-});
-
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ ok: false, error: err.message || 'server error' });
+app.use((err, _req, res, _next) => {
+  console.error('UNHANDLED ERROR:', err);
+  res.status(500).json({ ok: false, error: 'internal_server_error' });
 });
 
 app.listen(PORT, () => {
-  console.log(`delivery-note-system listening on ${PORT}`);
+  console.log(`dn server listening on :${PORT}`);
 });
