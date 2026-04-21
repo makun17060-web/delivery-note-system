@@ -232,8 +232,7 @@
       font-weight: 700;
     }
 
-    td.num,
-    th.num {
+    td.num, th.num {
       text-align: right;
       white-space: nowrap;
     }
@@ -439,8 +438,7 @@
       text-align: center;
     }
 
-    .loading,
-    .error {
+    .loading, .error {
       padding: 40px 18px;
       text-align: center;
       font-size: 15px;
@@ -459,9 +457,7 @@
         padding: 18px 14px 22px;
       }
 
-      .head,
-      .parties,
-      .sign-grid {
+      .head, .parties, .sign-grid {
         grid-template-columns: 1fr;
       }
 
@@ -576,12 +572,8 @@
     }
 
     function statusBadge(status) {
-      if (status === 'signed') {
-        return `<span class="badge signed">受領サイン済み</span>`;
-      }
-      if (status === 'issued') {
-        return `<span class="badge issued">発行済み</span>`;
-      }
+      if (status === 'signed') return `<span class="badge signed">受領サイン済み</span>`;
+      if (status === 'issued') return `<span class="badge issued">発行済み</span>`;
       return `<span class="badge warn">${esc(status || '未設定')}</span>`;
     }
 
@@ -651,8 +643,20 @@
 
       const ctx = canvas.getContext('2d');
       let drawing = false;
-      let moved = false;
-      let lastPoint = null;
+      let hasInk = false;
+      let points = [];
+      let resizeHandler = null;
+
+      function configureContext(widthCss, heightCss, ratio) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, widthCss, heightCss);
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }
 
       function setupCanvas() {
         const rect = canvas.getBoundingClientRect();
@@ -661,27 +665,23 @@
         canvas.width = Math.floor(rect.width * ratio);
         canvas.height = Math.floor(rect.height * ratio);
 
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(ratio, ratio);
-        ctx.lineWidth = 2.2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#111827';
+        configureContext(rect.width, rect.height, ratio);
 
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, rect.width, rect.height);
-
-        moved = false;
-        lastPoint = null;
+        if (points.length > 0) {
+          redrawAll();
+        } else {
+          hasInk = false;
+        }
       }
 
       function clearCanvas() {
+        points = [];
         const rect = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, rect.width, rect.height);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, rect.width, rect.height);
-        moved = false;
-        lastPoint = null;
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        configureContext(rect.width, rect.height, ratio);
+        hasInk = false;
       }
 
       function getPoint(event) {
@@ -693,44 +693,95 @@
         };
       }
 
-      function drawSegment(from, to) {
-        const midX = (from.x + to.x) / 2;
-        const midY = (from.y + to.y) / 2;
+      function drawDot(p) {
         ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.quadraticCurveTo(from.x, from.y, midX, midY);
+        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#111827';
+        ctx.fill();
+      }
+
+      function drawStrokeSegment(p0, p1, p2) {
+        const mid1x = (p0.x + p1.x) / 2;
+        const mid1y = (p0.y + p1.y) / 2;
+        const mid2x = (p1.x + p2.x) / 2;
+        const mid2y = (p1.y + p2.y) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(mid1x, mid1y);
+        ctx.quadraticCurveTo(p1.x, p1.y, mid2x, mid2y);
         ctx.stroke();
+      }
+
+      function redrawAll() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        configureContext(rect.width, rect.height, ratio);
+
+        if (points.length === 0) return;
+
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          if (p.type === 'dot') {
+            drawDot(p);
+          }
+        }
+
+        const strokePoints = points.filter(p => p.type === 'move');
+        if (strokePoints.length === 1) {
+          drawDot(strokePoints[0]);
+          return;
+        }
+        if (strokePoints.length === 2) {
+          ctx.beginPath();
+          ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
+          ctx.lineTo(strokePoints[1].x, strokePoints[1].y);
+          ctx.stroke();
+          return;
+        }
+        for (let i = 0; i < strokePoints.length - 2; i++) {
+          drawStrokeSegment(strokePoints[i], strokePoints[i + 1], strokePoints[i + 2]);
+        }
       }
 
       function startDraw(event) {
         event.preventDefault();
         drawing = true;
         const p = getPoint(event);
-        lastPoint = p;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + 0.01, p.y + 0.01);
-        ctx.stroke();
+        points.push({ type: 'move', x: p.x, y: p.y });
+        drawDot(p);
+        hasInk = true;
       }
 
       function moveDraw(event) {
         if (!drawing) return;
         event.preventDefault();
+
         const p = getPoint(event);
-        if (!lastPoint) {
-          lastPoint = p;
+        points.push({ type: 'move', x: p.x, y: p.y });
+        hasInk = true;
+
+        const strokePoints = points.filter(pt => pt.type === 'move');
+        const len = strokePoints.length;
+
+        if (len === 2) {
+          ctx.beginPath();
+          ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
+          ctx.lineTo(strokePoints[1].x, strokePoints[1].y);
+          ctx.stroke();
           return;
         }
-        moved = true;
-        drawSegment(lastPoint, p);
-        lastPoint = p;
+
+        if (len >= 3) {
+          drawStrokeSegment(strokePoints[len - 3], strokePoints[len - 2], strokePoints[len - 1]);
+        }
       }
 
       function endDraw(event) {
         if (!drawing) return;
         event.preventDefault();
         drawing = false;
-        lastPoint = null;
       }
 
       canvas.addEventListener('mousedown', startDraw);
@@ -758,7 +809,7 @@
           msg.textContent = '署名者名を入力してください。';
           return;
         }
-        if (!moved) {
+        if (!hasInk) {
           msg.textContent = 'サインを書いてください。';
           return;
         }
@@ -796,22 +847,18 @@
         }
       });
 
-      window.addEventListener('resize', setupCanvas);
+      resizeHandler = () => setupCanvas();
+      window.addEventListener('resize', resizeHandler);
       setupCanvas();
     }
 
     async function reloadCurrentDeliveryNote() {
       if (!currentDeliveryNote || !currentDeliveryNote.id) return;
-
       const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(currentDeliveryNote.id)}`, {
         cache: 'no-store'
       });
       const json = await res.json();
-
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || 'reload_failed');
-      }
-
+      if (!res.ok || !json.ok) throw new Error(json.error || 'reload_failed');
       render(json);
     }
 
@@ -843,13 +890,10 @@
           <div class="meta-box">
             <div class="label">納品書番号</div>
             <div class="value">${esc(note.delivery_note_no || '')}</div>
-
             <div class="label">発行日</div>
             <div class="value">${ymdJa(note.issue_date)}</div>
-
             <div class="label">納品日</div>
             <div class="value">${ymdJa(note.delivery_date)}</div>
-
             <div class="label">ステータス</div>
             <div class="value">${esc(note.status || '')}</div>
           </div>
@@ -936,10 +980,8 @@
             <div class="receipt-grid">
               <div class="label">受領者</div>
               <div>${esc(receipt.received_by || '')}</div>
-
               <div class="label">署名者名</div>
               <div>${esc(receipt.signer_name || '')}</div>
-
               <div class="label">受領日時</div>
               <div>${dtJa(receipt.received_at)}</div>
             </div>
@@ -970,7 +1012,6 @@
 
       try {
         let url = '';
-
         if (token) {
           url = `/api/dn/delivery-notes/view/${encodeURIComponent(token)}`;
         } else if (id) {
