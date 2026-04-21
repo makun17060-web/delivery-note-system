@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNテスト画面</title>
+
+<style>
+body {
+  font-family: sans-serif;
+  margin: 0;
+  background: #f5f5f5;
+}
+.wrap {
+  max-width: 800px;
+  margin: auto;
+  padding: 16px;
+}
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+button {
+  padding: 10px 14px;
+  margin: 5px 5px 5px 0;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.primary {
+  background: #0f766e;
+  color: #fff;
+}
+.sub {
+  background: #e5e7eb;
+}
+pre {
+  background: #111;
+  color: #0f0;
+  padding: 10px;
+  overflow: auto;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<div class="card">
+  <h2>① 商品確認</h2>
+  <button onclick="loadProducts()">商品取得</button>
+</div>
+
+<div class="card">
+  <h2>② 得意先登録</h2>
+  <button onclick="createCustomer()">作成</button>
+</div>
+
+<div class="card">
+  <h2>③ 注文作成</h2>
+  <button onclick="createOrder()">注文作成</button>
+</div>
+
+<div class="card">
+  <h2>④ 納品書発行</h2>
+  <button onclick="createDN()">発行</button>
+</div>
+
+<div class="card">
+  <h2>⑤ サイン画面</h2>
+  <button onclick="goSign()">サインへ</button>
+</div>
+
+<div class="card">
+  <h2>ログ</h2>
+  <pre id="log">ready...</pre>
+</div>
+
+</div>
+
+<script>
+
+let customerId = null;
+let orderId = null;
+let dnId = null;
+
+function log(data) {
+  document.getElementById("log").textContent =
+    JSON.stringify(data, null, 2);
+}
+
+// ① 商品
+async function loadProducts() {
+  const res = await fetch("/api/dn/products");
+  const json = await res.json();
+  log(json);
+}
+
+// ② 得意先
+async function createCustomer() {
+  const res = await fetch("/api/dn/customers", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      customer_code: "test001",
+      name: "テスト商店"
+    })
+  });
+
+  const json = await res.json();
+  customerId = json.customer?.id;
+  log(json);
+}
+
+// ③ 注文
+async function createOrder() {
+
+  if (!customerId) {
+    alert("先に得意先作成して");
+    return;
+  }
+
+  const res = await fetch("/api/dn/orders", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      customer_id: customerId,
+      order_date: "2026-01-01",
+      items: [
+        {
+          product_name: "テスト商品",
+          quantity: 2,
+          unit_price: 1000
+        }
+      ]
+    })
+  });
+
+  const json = await res.json();
+  orderId = json.order?.id;
+  log(json);
+}
+
+// ④ 納品書
+async function createDN() {
+
+  if (!orderId) {
+    alert("先に注文作って");
+    return;
+  }
+
+  const res = await fetch(`/api/dn/delivery-notes/from-order/${orderId}`, {
+    method: "POST"
+  });
+
+  const json = await res.json();
+  dnId = json.delivery_note?.id;
+  log(json);
+}
+
+// ⑤ サイン
+function goSign() {
+  if (!dnId) {
+    alert("先に納品書作って");
+    return;
+  }
+  location.href = `/sign.html?id=${dnId}`;
+}
+
+</script>
+</body>
+</html>
