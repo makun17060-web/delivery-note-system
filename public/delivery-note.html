@@ -13,7 +13,6 @@
       --line: #d1d5db;
       --strong: #111827;
       --accent: #0f766e;
-      --accent-soft: #ecfeff;
       --danger: #b91c1c;
     }
 
@@ -295,6 +294,100 @@
       font-size: 14px;
     }
 
+    .sign-panel {
+      margin-top: 22px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .sign-panel h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .sign-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .sign-field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #374151;
+    }
+
+    .sign-field input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    .sig-wrap {
+      border: 2px dashed #9ca3af;
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .sig-wrap canvas {
+      display: block;
+      width: 100%;
+      height: 240px;
+      background: #fff;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .sign-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .sign-btn {
+      appearance: none;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .sign-btn.primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .sign-btn.sub {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .sign-help {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .sign-msg {
+      margin-top: 10px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
     .receipt {
       margin-top: 22px;
       border: 1px solid #bbf7d0;
@@ -367,7 +460,8 @@
       }
 
       .head,
-      .parties {
+      .parties,
+      .sign-grid {
         grid-template-columns: 1fr;
       }
 
@@ -387,6 +481,10 @@
 
       .receipt-grid {
         grid-template-columns: 1fr;
+      }
+
+      .sig-wrap canvas {
+        height: 220px;
       }
     }
 
@@ -413,6 +511,10 @@
 
       .sheet-inner {
         padding: 0;
+      }
+
+      .sign-panel {
+        display: none;
       }
     }
   </style>
@@ -441,26 +543,23 @@
       memo: 'この納品書はシステムにより発行されています。'
     };
 
+    let currentDeliveryNote = null;
+    let currentReceipt = null;
+
     function ymdJa(v) {
       if (!v) return '';
       const d = new Date(v);
       if (Number.isNaN(d.getTime())) return v;
-      const y = d.getFullYear();
-      const m = d.getMonth() + 1;
-      const day = d.getDate();
-      return `${y}年${m}月${day}日`;
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
     }
 
     function dtJa(v) {
       if (!v) return '';
       const d = new Date(v);
       if (Number.isNaN(d.getTime())) return v;
-      const y = d.getFullYear();
-      const m = d.getMonth() + 1;
-      const day = d.getDate();
       const hh = String(d.getHours()).padStart(2, '0');
       const mm = String(d.getMinutes()).padStart(2, '0');
-      return `${y}年${m}月${day}日 ${hh}:${mm}`;
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
     }
 
     function yen(v) {
@@ -488,6 +587,232 @@
 
     function buildCustomerAddress(note) {
       return [note.zip, note.pref, note.city, note.addr1, note.addr2].filter(Boolean).join(' ');
+    }
+
+    function renderSignSection(note, receipt) {
+      const el = document.getElementById('signSection');
+      if (!el) return;
+
+      if (receipt) {
+        el.innerHTML = `
+          <section class="sign-panel">
+            <h2>受領サイン</h2>
+            <div class="sign-help">この納品書はすでに受領サイン済みです。</div>
+          </section>
+        `;
+        return;
+      }
+
+      el.innerHTML = `
+        <section class="sign-panel">
+          <h2>受領サイン</h2>
+
+          <div class="sign-grid">
+            <div class="sign-field">
+              <label for="receivedBy">受領者名</label>
+              <input id="receivedBy" type="text" placeholder="例: 山田太郎" />
+            </div>
+
+            <div class="sign-field">
+              <label for="signerName">署名者名</label>
+              <input id="signerName" type="text" placeholder="例: 山田太郎" />
+            </div>
+          </div>
+
+          <div class="sig-wrap">
+            <canvas id="signCanvas"></canvas>
+          </div>
+
+          <div class="sign-help">
+            指またはマウスでサインしてください。保存後、この納品書は受領サイン済みとして記録されます。
+          </div>
+
+          <div class="sign-actions">
+            <button class="sign-btn sub" id="signClearBtn" type="button">クリア</button>
+            <button class="sign-btn primary" id="signSaveBtn" type="button">受領サインを保存</button>
+          </div>
+
+          <div class="sign-msg" id="signMsg"></div>
+        </section>
+      `;
+
+      setupEmbeddedSignaturePad(note.id);
+    }
+
+    function setupEmbeddedSignaturePad(deliveryNoteId) {
+      const canvas = document.getElementById('signCanvas');
+      const msg = document.getElementById('signMsg');
+      const clearBtn = document.getElementById('signClearBtn');
+      const saveBtn = document.getElementById('signSaveBtn');
+      const receivedByInput = document.getElementById('receivedBy');
+      const signerNameInput = document.getElementById('signerName');
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      let drawing = false;
+      let moved = false;
+      let lastPoint = null;
+
+      function setupCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#111827';
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+
+        moved = false;
+        lastPoint = null;
+      }
+
+      function clearCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        moved = false;
+        lastPoint = null;
+      }
+
+      function getPoint(event) {
+        const rect = canvas.getBoundingClientRect();
+        const source = event.touches ? event.touches[0] : event;
+        return {
+          x: source.clientX - rect.left,
+          y: source.clientY - rect.top
+        };
+      }
+
+      function drawSegment(from, to) {
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.quadraticCurveTo(from.x, from.y, midX, midY);
+        ctx.stroke();
+      }
+
+      function startDraw(event) {
+        event.preventDefault();
+        drawing = true;
+        const p = getPoint(event);
+        lastPoint = p;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + 0.01, p.y + 0.01);
+        ctx.stroke();
+      }
+
+      function moveDraw(event) {
+        if (!drawing) return;
+        event.preventDefault();
+        const p = getPoint(event);
+        if (!lastPoint) {
+          lastPoint = p;
+          return;
+        }
+        moved = true;
+        drawSegment(lastPoint, p);
+        lastPoint = p;
+      }
+
+      function endDraw(event) {
+        if (!drawing) return;
+        event.preventDefault();
+        drawing = false;
+        lastPoint = null;
+      }
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', moveDraw);
+      window.addEventListener('mouseup', endDraw);
+
+      canvas.addEventListener('touchstart', startDraw, { passive: false });
+      canvas.addEventListener('touchmove', moveDraw, { passive: false });
+      window.addEventListener('touchend', endDraw, { passive: false });
+
+      clearBtn.addEventListener('click', () => {
+        clearCanvas();
+        msg.textContent = 'サインをクリアしました。';
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const receivedBy = receivedByInput.value.trim();
+        const signerName = signerNameInput.value.trim();
+
+        if (!receivedBy) {
+          msg.textContent = '受領者名を入力してください。';
+          return;
+        }
+        if (!signerName) {
+          msg.textContent = '署名者名を入力してください。';
+          return;
+        }
+        if (!moved) {
+          msg.textContent = 'サインを書いてください。';
+          return;
+        }
+
+        try {
+          saveBtn.disabled = true;
+          saveBtn.textContent = '保存中...';
+          msg.textContent = '';
+
+          const signatureDataUrl = canvas.toDataURL('image/png');
+
+          const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(deliveryNoteId)}/sign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              received_by: receivedBy,
+              signer_name: signerName,
+              signature_data_url: signatureDataUrl
+            })
+          });
+
+          const json = await res.json();
+
+          if (!res.ok || !json.ok) {
+            throw new Error(json.error || 'sign_failed');
+          }
+
+          msg.textContent = '受領サインを保存しました。';
+          await reloadCurrentDeliveryNote();
+        } catch (err) {
+          console.error(err);
+          msg.textContent = `保存失敗: ${err.message}`;
+          saveBtn.disabled = false;
+          saveBtn.textContent = '受領サインを保存';
+        }
+      });
+
+      window.addEventListener('resize', setupCanvas);
+      setupCanvas();
+    }
+
+    async function reloadCurrentDeliveryNote() {
+      if (!currentDeliveryNote || !currentDeliveryNote.id) return;
+
+      const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(currentDeliveryNote.id)}`, {
+        cache: 'no-store'
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'reload_failed');
+      }
+
+      render(json);
     }
 
     function render(data) {
@@ -603,6 +928,8 @@
           <p>${esc(note.memo || SUPPLIER.memo || '特記事項はありません。')}</p>
         </section>
 
+        <section id="signSection"></section>
+
         ${receipt ? `
           <section class="receipt">
             <h2>受領情報</h2>
@@ -629,6 +956,10 @@
           ${esc(SUPPLIER.companyName)} / ${esc(SUPPLIER.memo || '')}
         </div>
       `;
+
+      currentDeliveryNote = note;
+      currentReceipt = receipt;
+      renderSignSection(note, receipt);
     }
 
     async function boot() {
