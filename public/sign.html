@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>受領サイン</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;color:#111827}
+    .wrap{max-width:760px;margin:24px auto;padding:16px}.card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    label{display:block;font-weight:700;margin-bottom:6px}input,button{width:100%;padding:12px;border-radius:12px;border:1px solid #d1d5db;box-sizing:border-box;font-size:16px}
+    button{border:0;background:#111827;color:#fff;cursor:pointer}.secondary{background:#eef2ff;color:#111827}
+    .actions{display:flex;gap:12px;flex-wrap:wrap}.actions button{width:auto}
+    canvas{width:100%;height:240px;border:1px solid #d1d5db;border-radius:12px;background:#fff;touch-action:none}.msg{margin-top:12px;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>受領サイン</h1>
+    <p id="docInfo">読み込み中...</p>
+    <label>受領者名</label>
+    <input id="receivedBy" placeholder="山田太郎">
+    <div style="margin-top:12px">
+      <label>署名</label>
+      <canvas id="pad" width="700" height="240"></canvas>
+    </div>
+    <div class="actions" style="margin-top:12px">
+      <button type="button" class="secondary" onclick="clearPad()">クリア</button>
+      <button type="button" onclick="saveSign()">保存</button>
+    </div>
+    <div id="msg" class="msg"></div>
+  </div>
+</div>
+<script>
+const token = location.pathname.split('/').pop();
+let deliveryNote = null;
+const canvas = document.getElementById('pad');
+const ctx = canvas.getContext('2d');
+ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+let drawing = false;
+function point(e){
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
+}
+function start(e){ drawing = true; const p = point(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); }
+function move(e){ if(!drawing) return; const p = point(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); }
+function end(){ drawing = false; }
+['mousedown','mousemove','mouseup','mouseleave'].forEach(ev => canvas.addEventListener(ev, ev==='mousedown'?start:ev==='mousemove'?move:end));
+['touchstart','touchmove','touchend','touchcancel'].forEach(ev => canvas.addEventListener(ev, ev==='touchstart'?start:ev==='touchmove'?move:end, { passive:false }));
+function clearPad(){ ctx.clearRect(0,0,canvas.width,canvas.height); }
+async function boot(){
+  const res = await fetch('/api/delivery-notes/view/' + token); const data = await res.json();
+  if(!data.ok){ document.getElementById('msg').textContent = '納品書が見つかりません'; return; }
+  deliveryNote = data.delivery_note;
+  document.getElementById('docInfo').textContent = `${deliveryNote.delivery_note_no} / ${deliveryNote.customer_name} / 合計 ${Number(deliveryNote.total_amount).toLocaleString('ja-JP')} 円`;
+  if (deliveryNote.receipt?.received_by) document.getElementById('receivedBy').value = deliveryNote.receipt.received_by;
+}
+async function saveSign(){
+  if(!deliveryNote) return;
+  const payload = {
+    token,
+    received_by: document.getElementById('receivedBy').value,
+    signer_name: document.getElementById('receivedBy').value,
+    signature_data_url: canvas.toDataURL('image/png')
+  };
+  const res = await fetch('/api/delivery-notes/' + deliveryNote.id + '/sign', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('msg').textContent = data.ok ? '保存しました。納品書画面に戻ります。' : ('エラー: ' + data.error);
+  if(data.ok) setTimeout(() => location.href = '/view/' + token, 700);
+}
+boot();
+</script>
+</body>
+</html>

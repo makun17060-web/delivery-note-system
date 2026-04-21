@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>納品書管理画面</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f5f6fa;margin:0;color:#111827}
+    .wrap{max-width:1200px;margin:24px auto;padding:16px}
+    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left;font-size:14px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}.btn{padding:8px 12px;border:0;border-radius:10px;cursor:pointer;background:#111827;color:#fff}
+    .btn.secondary{background:#eef2ff;color:#111827}.row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+    pre{background:#111827;color:#fff;padding:16px;border-radius:12px;overflow:auto;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <h1>納品書管理画面</h1>
+      <div class="actions">
+        <button class="btn secondary" onclick="loadOrders()">再読込</button>
+        <a class="btn secondary" href="/public/order.html" style="text-decoration:none">注文画面</a>
+      </div>
+    </div>
+    <p>この画面は Basic認証付きで使ってください。</p>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>注文番号</th><th>得意先</th><th>納品日</th><th>状態</th><th>操作</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <h2>結果</h2>
+    <pre id="result">ここに結果が出ます</pre>
+  </div>
+</div>
+<script>
+function authHeaders(){
+  const raw = prompt('Basic認証 user:pass を入力してください', 'admin:change-me');
+  if(!raw) return {};
+  return { Authorization: 'Basic ' + btoa(raw) };
+}
+let HEADERS = null;
+
+async function loadOrders(){
+  if(!HEADERS) HEADERS = authHeaders();
+  const res = await fetch('/api/orders', { headers: HEADERS });
+  const data = await res.json();
+  if(!data.ok){ document.getElementById('result').textContent = JSON.stringify(data,null,2); return; }
+  document.getElementById('tbody').innerHTML = (data.orders||[]).map(o => `
+    <tr>
+      <td>${o.id}</td>
+      <td>${o.order_no}</td>
+      <td>${o.customer_name}</td>
+      <td>${o.delivery_date || ''}</td>
+      <td>${o.status}</td>
+      <td class="actions">
+        <button class="btn" onclick="issue(${o.id})">納品書発行</button>
+        <button class="btn secondary" onclick="detail(${o.id})">詳細</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function issue(orderId){
+  const res = await fetch('/api/delivery-notes/from-order/' + orderId, { method:'POST', headers: HEADERS || authHeaders() });
+  const data = await res.json();
+  document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+  if(data.view_url) window.open(data.view_url, '_blank');
+  loadOrders();
+}
+
+async function detail(orderId){
+  const res = await fetch('/api/orders/' + orderId, { headers: HEADERS || authHeaders() });
+  const data = await res.json();
+  document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+}
+
+loadOrders();
+</script>
+</body>
+</html>

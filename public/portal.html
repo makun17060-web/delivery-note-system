@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>納品履歴</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;color:#111827}.wrap{max-width:960px;margin:24px auto;padding:16px}
+    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+    input,button{padding:12px;border-radius:12px;border:1px solid #d1d5db;font-size:16px}button{border:0;background:#111827;color:#fff;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;padding:8px 12px;background:#eef2ff;color:#111827;border-radius:10px;text-decoration:none}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>得意先 納品履歴</h1>
+    <div class="actions">
+      <input id="customerCode" placeholder="TOKU001" value="TOKU001">
+      <button onclick="loadList()">表示</button>
+      <a class="btn" href="/public/order.html">注文画面</a>
+    </div>
+    <table>
+      <thead><tr><th>納品書番号</th><th>発行日</th><th>納品日</th><th>状態</th><th>合計</th><th>操作</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+async function loadList(){
+  const code = document.getElementById('customerCode').value.trim();
+  const res = await fetch('/api/customer-portal/delivery-notes?customer_code=' + encodeURIComponent(code));
+  const data = await res.json();
+  document.getElementById('tbody').innerHTML = (data.delivery_notes || []).map(n => `
+    <tr>
+      <td>${n.delivery_note_no}</td>
+      <td>${n.issue_date || ''}</td>
+      <td>${n.delivery_date || ''}</td>
+      <td>${n.status}</td>
+      <td>${Number(n.total_amount).toLocaleString('ja-JP')} 円</td>
+      <td class="actions">
+        <a class="btn" href="${n.view_url}" target="_blank">表示</a>
+        <a class="btn" href="${n.sign_url}" target="_blank">サイン</a>
+      </td>
+    </tr>
+  `).join('');
+}
+loadList();
+</script>
+</body>
+</html>

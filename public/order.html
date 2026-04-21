@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>得意先注文画面</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;color:#1f2937}
+    .wrap{max-width:960px;margin:24px auto;padding:16px}
+    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:16px}
+    h1,h2{margin:0 0 14px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    @media (max-width:720px){.grid{grid-template-columns:1fr}}
+    label{font-size:14px;font-weight:700;display:block;margin-bottom:6px}
+    input,select,textarea,button{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:12px;box-sizing:border-box;font-size:16px}
+    button{background:#111827;color:#fff;border:0;font-weight:700;cursor:pointer}
+    button.secondary{background:#eef2ff;color:#111827}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+    .actions{display:flex;gap:12px;flex-wrap:wrap}.actions button{width:auto;padding:12px 18px}
+    .num{text-align:right}.msg{padding:12px;border-radius:12px;background:#f3f4f6;display:none;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>得意先注文画面</h1>
+    <div class="grid">
+      <div>
+        <label>得意先</label>
+        <select id="customer"></select>
+      </div>
+      <div>
+        <label>注文日</label>
+        <input id="orderDate" type="date">
+      </div>
+      <div>
+        <label>納品希望日</label>
+        <input id="deliveryDate" type="date">
+      </div>
+      <div>
+        <label>備考</label>
+        <textarea id="memo" rows="2" placeholder="午前中希望など"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>商品</h2>
+    <div class="actions" style="margin-bottom:12px">
+      <button type="button" class="secondary" onclick="addRow()">商品行を追加</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>商品</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th><th></th></tr>
+      </thead>
+      <tbody id="items"></tbody>
+    </table>
+    <div style="margin-top:16px;text-align:right;font-size:20px;font-weight:700">小計: <span id="subtotal">0</span> 円</div>
+    <div style="margin-top:16px" class="actions">
+      <button type="button" onclick="submitOrder()">注文を送信</button>
+      <button type="button" class="secondary" onclick="location.href='/public/portal.html'">納品履歴を見る</button>
+    </div>
+    <div id="msg" class="msg" style="margin-top:12px"></div>
+  </div>
+</div>
+<script>
+let PRODUCTS = [];
+const itemsEl = document.getElementById('items');
+const msgEl = document.getElementById('msg');
+
+function today(){ return new Date().toISOString().slice(0,10); }
+document.getElementById('orderDate').value = today();
+document.getElementById('deliveryDate').value = today();
+
+async function boot(){
+  const [cRes,pRes] = await Promise.all([fetch('/api/customers'), fetch('/api/products')]);
+  const cData = await cRes.json();
+  const pData = await pRes.json();
+  PRODUCTS = pData.products || [];
+  document.getElementById('customer').innerHTML = (cData.customers || []).map(c => `<option value="${c.customer_code}">${c.customer_code} / ${c.name}</option>`).join('');
+  addRow();
+}
+
+function productOptions(selected=''){
+  return '<option value="">商品を選択</option>' + PRODUCTS.map(p => `<option value="${p.product_code}" ${selected===p.product_code?'selected':''} data-name="${p.name}" data-price="${p.price}" data-unit="${p.unit}">${p.product_code} / ${p.name}</option>`).join('');
+}
+
+function addRow(){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select class="product" onchange="fillProduct(this)">${productOptions()}</select></td>
+    <td><input class="qty" type="number" min="0" step="1" value="1" oninput="recalc()"></td>
+    <td><input class="unit" value="袋"></td>
+    <td><input class="price" type="number" min="0" step="1" value="0" oninput="recalc()"></td>
+    <td class="line num">0</td>
+    <td><button type="button" class="secondary" onclick="this.closest('tr').remove();recalc()">削除</button></td>
+  `;
+  itemsEl.appendChild(tr);
+  recalc();
+}
+
+function fillProduct(sel){
+  const opt = sel.options[sel.selectedIndex];
+  const tr = sel.closest('tr');
+  tr.querySelector('.unit').value = opt.dataset.unit || '袋';
+  tr.querySelector('.price').value = Number(opt.dataset.price || 0);
+  recalc();
+}
+
+function recalc(){
+  let subtotal = 0;
+  [...itemsEl.querySelectorAll('tr')].forEach(tr => {
+    const qty = Number(tr.querySelector('.qty').value || 0);
+    const price = Number(tr.querySelector('.price').value || 0);
+    const amount = qty * price;
+    subtotal += amount;
+    tr.querySelector('.line').textContent = amount.toLocaleString('ja-JP');
+  });
+  document.getElementById('subtotal').textContent = subtotal.toLocaleString('ja-JP');
+}
+
+async function submitOrder(){
+  const rows = [...itemsEl.querySelectorAll('tr')];
+  const items = rows.map(tr => {
+    const code = tr.querySelector('.product').value;
+    const p = PRODUCTS.find(x => x.product_code === code) || {};
+    return {
+      product_code: code,
+      product_name: p.name || '',
+      quantity: Number(tr.querySelector('.qty').value || 0),
+      unit: tr.querySelector('.unit').value || '袋',
+      unit_price: Number(tr.querySelector('.price').value || 0),
+      tax_rate: Number(p.tax_rate || 8)
+    };
+  }).filter(x => x.product_code && x.quantity > 0);
+
+  if (!items.length) return showMsg('商品を1つ以上入れてください');
+
+  const payload = {
+    customer_code: document.getElementById('customer').value,
+    order_date: document.getElementById('orderDate').value,
+    delivery_date: document.getElementById('deliveryDate').value,
+    memo: document.getElementById('memo').value,
+    items
+  };
+
+  const res = await fetch('/api/orders', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!data.ok) return showMsg('エラー: ' + data.error);
+  showMsg(`注文を保存しました\n注文番号: ${data.order_no}\n管理画面で納品書発行してください`);
+}
+
+function showMsg(text){ msgEl.style.display='block'; msgEl.textContent=text; }
+boot();
+</script>
+</body>
+</html>
