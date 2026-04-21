@@ -824,31 +824,8 @@ app.post('/api/dn/seed/products-from-main', async (_req, res) => {
 ========================= */
 
 app.get('/', (_req, res) => {
-  res.send(`
-    <html lang="ja">
-      <head>
-        <meta charset="utf-8" />
-        <title>dn system</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>
-          body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 16px; line-height: 1.6; }
-          code { background: #f4f4f4; padding: 2px 6px; border-radius: 6px; }
-          a { display: block; margin: 8px 0; }
-        </style>
-      </head>
-      <body>
-        <h1>dn system</h1>
-        <p>既存ミニアプリ本体とは分離された納品書システムです。</p>
-        <a href="/health">/health</a>
-        <a href="/api/dn/customers">/api/dn/customers</a>
-        <a href="/api/dn/products">/api/dn/products</a>
-        <a href="/api/dn/orders">/api/dn/orders</a>
-        <a href="/api/dn/delivery-notes">/api/dn/delivery-notes</a>
-      </body>
-    </html>
-  `);
+  res.redirect('/delivery-note.html');
 });
-
 /* =========================
    Error
 ========================= */
