@@ -335,9 +335,6 @@
       border-radius: 12px;
       background: #fff;
       overflow: hidden;
-      touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
     }
 
     .sig-wrap canvas {
@@ -346,7 +343,6 @@
       height: 240px;
       background: #fff;
       touch-action: none;
-      cursor: crosshair;
     }
 
     .sign-actions {
@@ -529,6 +525,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
   <script>
     const SUPPLIER = {
       companyName: '合同会社 磯屋コマース',
@@ -541,6 +538,7 @@
 
     let currentDeliveryNote = null;
     let currentReceipt = null;
+    let currentSignaturePad = null;
 
     function ymdJa(v) {
       if (!v) return '';
@@ -628,10 +626,10 @@
         </section>
       `;
 
-      setupEmbeddedSignaturePad(note.id);
+      setupSignaturePad(note.id);
     }
 
-    function setupEmbeddedSignaturePad(deliveryNoteId) {
+    function setupSignaturePad(deliveryNoteId) {
       const canvas = document.getElementById('signCanvas');
       const msg = document.getElementById('signMsg');
       const clearBtn = document.getElementById('signClearBtn');
@@ -639,161 +637,36 @@
       const receivedByInput = document.getElementById('receivedBy');
       const signerNameInput = document.getElementById('signerName');
 
-      if (!canvas) return;
+      if (!canvas || !window.SignaturePad) return;
 
-      const ctx = canvas.getContext('2d');
-      let drawing = false;
-      let hasInk = false;
-      let points = [];
-      let resizeHandler = null;
-
-      function configureContext(widthCss, heightCss, ratio) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      function resizeCanvas() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * ratio;
+        canvas.height = rect.height * ratio;
+        const ctx = canvas.getContext('2d');
         ctx.scale(ratio, ratio);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, widthCss, heightCss);
-        ctx.strokeStyle = '#111827';
-        ctx.lineWidth = 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
 
-      function setupCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-
-        canvas.width = Math.floor(rect.width * ratio);
-        canvas.height = Math.floor(rect.height * ratio);
-
-        configureContext(rect.width, rect.height, ratio);
-
-        if (points.length > 0) {
-          redrawAll();
-        } else {
-          hasInk = false;
+        if (currentSignaturePad) {
+          currentSignaturePad.clear();
         }
       }
 
-      function clearCanvas() {
-        points = [];
-        const rect = canvas.getBoundingClientRect();
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = Math.floor(rect.width * ratio);
-        canvas.height = Math.floor(rect.height * ratio);
-        configureContext(rect.width, rect.height, ratio);
-        hasInk = false;
-      }
+      currentSignaturePad = new window.SignaturePad(canvas, {
+        minWidth: 1.0,
+        maxWidth: 2.6,
+        penColor: 'rgb(17, 24, 39)',
+        backgroundColor: 'rgb(255,255,255)',
+        throttle: 8,
+        minDistance: 2,
+        velocityFilterWeight: 0.7
+      });
 
-      function getPoint(event) {
-        const rect = canvas.getBoundingClientRect();
-        const source = event.touches ? event.touches[0] : event;
-        return {
-          x: source.clientX - rect.left,
-          y: source.clientY - rect.top
-        };
-      }
-
-      function drawDot(p) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#111827';
-        ctx.fill();
-      }
-
-      function drawStrokeSegment(p0, p1, p2) {
-        const mid1x = (p0.x + p1.x) / 2;
-        const mid1y = (p0.y + p1.y) / 2;
-        const mid2x = (p1.x + p2.x) / 2;
-        const mid2y = (p1.y + p2.y) / 2;
-
-        ctx.beginPath();
-        ctx.moveTo(mid1x, mid1y);
-        ctx.quadraticCurveTo(p1.x, p1.y, mid2x, mid2y);
-        ctx.stroke();
-      }
-
-      function redrawAll() {
-        const rect = canvas.getBoundingClientRect();
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        canvas.width = Math.floor(rect.width * ratio);
-        canvas.height = Math.floor(rect.height * ratio);
-        configureContext(rect.width, rect.height, ratio);
-
-        if (points.length === 0) return;
-
-        for (let i = 0; i < points.length; i++) {
-          const p = points[i];
-          if (p.type === 'dot') {
-            drawDot(p);
-          }
-        }
-
-        const strokePoints = points.filter(p => p.type === 'move');
-        if (strokePoints.length === 1) {
-          drawDot(strokePoints[0]);
-          return;
-        }
-        if (strokePoints.length === 2) {
-          ctx.beginPath();
-          ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
-          ctx.lineTo(strokePoints[1].x, strokePoints[1].y);
-          ctx.stroke();
-          return;
-        }
-        for (let i = 0; i < strokePoints.length - 2; i++) {
-          drawStrokeSegment(strokePoints[i], strokePoints[i + 1], strokePoints[i + 2]);
-        }
-      }
-
-      function startDraw(event) {
-        event.preventDefault();
-        drawing = true;
-        const p = getPoint(event);
-        points.push({ type: 'move', x: p.x, y: p.y });
-        drawDot(p);
-        hasInk = true;
-      }
-
-      function moveDraw(event) {
-        if (!drawing) return;
-        event.preventDefault();
-
-        const p = getPoint(event);
-        points.push({ type: 'move', x: p.x, y: p.y });
-        hasInk = true;
-
-        const strokePoints = points.filter(pt => pt.type === 'move');
-        const len = strokePoints.length;
-
-        if (len === 2) {
-          ctx.beginPath();
-          ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
-          ctx.lineTo(strokePoints[1].x, strokePoints[1].y);
-          ctx.stroke();
-          return;
-        }
-
-        if (len >= 3) {
-          drawStrokeSegment(strokePoints[len - 3], strokePoints[len - 2], strokePoints[len - 1]);
-        }
-      }
-
-      function endDraw(event) {
-        if (!drawing) return;
-        event.preventDefault();
-        drawing = false;
-      }
-
-      canvas.addEventListener('mousedown', startDraw);
-      canvas.addEventListener('mousemove', moveDraw);
-      window.addEventListener('mouseup', endDraw);
-
-      canvas.addEventListener('touchstart', startDraw, { passive: false });
-      canvas.addEventListener('touchmove', moveDraw, { passive: false });
-      window.addEventListener('touchend', endDraw, { passive: false });
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
 
       clearBtn.addEventListener('click', () => {
-        clearCanvas();
+        currentSignaturePad.clear();
         msg.textContent = 'サインをクリアしました。';
       });
 
@@ -809,7 +682,7 @@
           msg.textContent = '署名者名を入力してください。';
           return;
         }
-        if (!hasInk) {
+        if (currentSignaturePad.isEmpty()) {
           msg.textContent = 'サインを書いてください。';
           return;
         }
@@ -819,7 +692,7 @@
           saveBtn.textContent = '保存中...';
           msg.textContent = '';
 
-          const signatureDataUrl = canvas.toDataURL('image/png');
+          const signatureDataUrl = currentSignaturePad.toDataURL('image/png');
 
           const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(deliveryNoteId)}/sign`, {
             method: 'POST',
@@ -846,19 +719,20 @@
           saveBtn.textContent = '受領サインを保存';
         }
       });
-
-      resizeHandler = () => setupCanvas();
-      window.addEventListener('resize', resizeHandler);
-      setupCanvas();
     }
 
     async function reloadCurrentDeliveryNote() {
       if (!currentDeliveryNote || !currentDeliveryNote.id) return;
+
       const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(currentDeliveryNote.id)}`, {
         cache: 'no-store'
       });
       const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'reload_failed');
+
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'reload_failed');
+      }
+
       render(json);
     }
 
