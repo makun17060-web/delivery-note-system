@@ -44,16 +44,22 @@ let HEADERS = null;
 
 async function loadOrders(){
   if(!HEADERS) HEADERS = authHeaders();
-  const res = await fetch('/api/orders', { headers: HEADERS });
+
+  const res = await fetch('/api/tokuisaki-orders', { headers: HEADERS });
   const data = await res.json();
-  if(!data.ok){ document.getElementById('result').textContent = JSON.stringify(data,null,2); return; }
-  document.getElementById('tbody').innerHTML = (data.orders||[]).map(o => `
+
+  if(!data.ok){
+    document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+
+  document.getElementById('tbody').innerHTML = (data.orders || []).map(o => `
     <tr>
       <td>${o.id}</td>
-      <td>${o.order_no}</td>
-      <td>${o.customer_name}</td>
+      <td>${o.order_no || ''}</td>
+      <td>${o.customer_name || ''}</td>
       <td>${o.delivery_date || ''}</td>
-      <td>${o.status}</td>
+      <td>${o.status || ''}</td>
       <td class="actions">
         <button class="btn" onclick="issue(${o.id})">納品書発行</button>
         <button class="btn secondary" onclick="detail(${o.id})">詳細</button>
@@ -63,15 +69,27 @@ async function loadOrders(){
 }
 
 async function issue(orderId){
-  const res = await fetch('/api/delivery-notes/from-order/' + orderId, { method:'POST', headers: HEADERS || authHeaders() });
+  const res = await fetch('/api/admin/delivery-notes/from-order/' + orderId, {
+    method:'POST',
+    headers: HEADERS || authHeaders()
+  });
+
   const data = await res.json();
   document.getElementById('result').textContent = JSON.stringify(data, null, 2);
-  if(data.view_url) window.open(data.view_url, '_blank');
+
+  if (data.delivery_note && data.delivery_note.view_token) {
+    const noteViewUrl = `https://delivery-note-system.onrender.com/delivery-note.html?token=${data.delivery_note.view_token}`;
+    window.open(noteViewUrl, '_blank');
+  }
+
   loadOrders();
 }
 
 async function detail(orderId){
-  const res = await fetch('/api/orders/' + orderId, { headers: HEADERS || authHeaders() });
+  const res = await fetch('/api/tokuisaki-orders/' + orderId, {
+    headers: HEADERS || authHeaders()
+  });
+
   const data = await res.json();
   document.getElementById('result').textContent = JSON.stringify(data, null, 2);
 }
