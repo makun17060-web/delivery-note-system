@@ -5,20 +5,237 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>得意先注文画面</title>
   <style>
-    body{font-family:system-ui,sans-serif;background:#f6f7fb;margin:0;color:#1f2937}
-    .wrap{max-width:960px;margin:24px auto;padding:16px}
-    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(0,0,0,.08);margin-bottom:16px}
-    h1,h2{margin:0 0 14px}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-    @media (max-width:720px){.grid{grid-template-columns:1fr}}
-    label{font-size:14px;font-weight:700;display:block;margin-bottom:6px}
-    input,select,textarea,button{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:12px;box-sizing:border-box;font-size:16px}
-    button{background:#111827;color:#fff;border:0;font-weight:700;cursor:pointer}
-    button.secondary{background:#eef2ff;color:#111827}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
-    .actions{display:flex;gap:12px;flex-wrap:wrap}.actions button{width:auto;padding:12px 18px}
-    .num{text-align:right}.msg{padding:12px;border-radius:12px;background:#f3f4f6;display:none;white-space:pre-wrap}
+    :root{
+      --bg:#f6f7fb;
+      --card:#fff;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --primary:#111827;
+      --sub:#eef2ff;
+      --danger:#b91c1c;
+    }
+
+    *{box-sizing:border-box}
+
+    body{
+      font-family:system-ui,sans-serif;
+      background:var(--bg);
+      margin:0;
+      color:var(--text);
+    }
+
+    .wrap{
+      max-width:960px;
+      margin:20px auto;
+      padding:12px;
+    }
+
+    .card{
+      background:var(--card);
+      border-radius:16px;
+      padding:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,.08);
+      margin-bottom:16px;
+    }
+
+    h1,h2{
+      margin:0 0 14px;
+      line-height:1.3;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
+    }
+
+    label{
+      font-size:14px;
+      font-weight:700;
+      display:block;
+      margin-bottom:6px;
+    }
+
+    input,select,textarea,button{
+      width:100%;
+      padding:12px;
+      border:1px solid #d1d5db;
+      border-radius:12px;
+      box-sizing:border-box;
+      font-size:16px;
+      background:#fff;
+    }
+
+    textarea{
+      min-height:88px;
+      resize:vertical;
+    }
+
+    button{
+      background:var(--primary);
+      color:#fff;
+      border:0;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    button.secondary{
+      background:var(--sub);
+      color:var(--text);
+    }
+
+    button.danger{
+      background:#fff1f2;
+      color:var(--danger);
+      border:1px solid #fecdd3;
+    }
+
+    .actions{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .actions button,
+    .actions a{
+      width:auto;
+      padding:12px 18px;
+    }
+
+    .table-wrap{
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+    }
+
+    th,td{
+      padding:10px;
+      border-bottom:1px solid var(--line);
+      text-align:left;
+      vertical-align:top;
+    }
+
+    .num{text-align:right}
+
+    .msg{
+      padding:12px;
+      border-radius:12px;
+      background:#f3f4f6;
+      display:none;
+      white-space:pre-wrap;
+    }
+
+    .subtotal-box{
+      margin-top:16px;
+      text-align:right;
+      font-size:20px;
+      font-weight:700;
+    }
+
+    .mobile-items{
+      display:none;
+    }
+
+    .item-card{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+      margin-bottom:12px;
+      background:#fff;
+    }
+
+    .item-top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+      margin-bottom:10px;
+    }
+
+    .item-title{
+      font-weight:700;
+      font-size:15px;
+      line-height:1.4;
+    }
+
+    .item-code{
+      color:var(--muted);
+      font-size:12px;
+      margin-top:4px;
+    }
+
+    .item-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      margin-bottom:10px;
+    }
+
+    .line-amount{
+      font-weight:700;
+      text-align:right;
+      margin-top:6px;
+    }
+
+    .footer-actions{
+      margin-top:16px;
+    }
+
+    .footer-actions .actions{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+
+    @media (max-width:720px){
+      .wrap{
+        margin:12px auto;
+        padding:10px;
+      }
+
+      .card{
+        padding:14px;
+        border-radius:14px;
+      }
+
+      .grid{
+        grid-template-columns:1fr;
+      }
+
+      .desktop-items{
+        display:none;
+      }
+
+      .mobile-items{
+        display:block;
+      }
+
+      .item-grid{
+        grid-template-columns:1fr;
+      }
+
+      .actions{
+        flex-direction:column;
+      }
+
+      .actions button,
+      .actions a{
+        width:100%;
+      }
+
+      .footer-actions .actions{
+        grid-template-columns:1fr;
+      }
+
+      .subtotal-box{
+        font-size:18px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -47,90 +264,220 @@
 
   <div class="card">
     <h2>商品</h2>
+
     <div class="actions" style="margin-bottom:12px">
       <button type="button" class="secondary" onclick="addRow()">商品行を追加</button>
     </div>
-    <table>
-      <thead>
-        <tr><th>商品</th><th>数量</th><th>単位</th><th>単価</th><th>金額</th><th></th></tr>
-      </thead>
-      <tbody id="items"></tbody>
-    </table>
-    <div style="margin-top:16px;text-align:right;font-size:20px;font-weight:700">小計: <span id="subtotal">0</span> 円</div>
-    <div style="margin-top:16px" class="actions">
-      <button type="button" onclick="submitOrder()">注文を送信</button>
-      <button type="button" class="secondary" onclick="location.href='/public/portal.html'">納品履歴を見る</button>
+
+    <div class="desktop-items">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>商品</th>
+              <th>数量</th>
+              <th>単位</th>
+              <th>単価</th>
+              <th>金額</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="items"></tbody>
+        </table>
+      </div>
     </div>
+
+    <div id="mobileItems" class="mobile-items"></div>
+
+    <div class="subtotal-box">
+      小計: <span id="subtotal">0</span> 円
+    </div>
+
+    <div class="footer-actions">
+      <div class="actions">
+        <button type="button" onclick="submitOrder()">注文を送信</button>
+        <button type="button" class="secondary" onclick="location.href='/public/portal.html'">納品履歴を見る</button>
+      </div>
+    </div>
+
     <div id="msg" class="msg" style="margin-top:12px"></div>
   </div>
 </div>
+
 <script>
 let PRODUCTS = [];
+let rows = [];
+
 const itemsEl = document.getElementById('items');
+const mobileItemsEl = document.getElementById('mobileItems');
 const msgEl = document.getElementById('msg');
 
-function today(){ return new Date().toISOString().slice(0,10); }
+function today(){
+  return new Date().toISOString().slice(0,10);
+}
+
 document.getElementById('orderDate').value = today();
 document.getElementById('deliveryDate').value = today();
 
 async function boot(){
-  const [cRes,pRes] = await Promise.all([fetch('/api/customers'), fetch('/api/products')]);
+  const [cRes, pRes] = await Promise.all([
+    fetch('/api/customers'),
+    fetch('/api/products')
+  ]);
+
   const cData = await cRes.json();
   const pData = await pRes.json();
+
   PRODUCTS = pData.products || [];
-  document.getElementById('customer').innerHTML = (cData.customers || []).map(c => `<option value="${c.customer_code}">${c.customer_code} / ${c.name}</option>`).join('');
+
+  document.getElementById('customer').innerHTML = (cData.customers || [])
+    .map(c => `<option value="${c.customer_code}">${c.customer_code} / ${c.name}</option>`)
+    .join('');
+
   addRow();
 }
 
 function productOptions(selected=''){
-  return '<option value="">商品を選択</option>' + PRODUCTS.map(p => `<option value="${p.product_code}" ${selected===p.product_code?'selected':''} data-name="${p.name}" data-price="${p.price}" data-unit="${p.unit}">${p.product_code} / ${p.name}</option>`).join('');
+  return '<option value="">商品を選択</option>' + PRODUCTS.map(p => `
+    <option
+      value="${p.product_code}"
+      ${selected === p.product_code ? 'selected' : ''}
+      data-name="${p.name}"
+      data-price="${p.price}"
+      data-unit="${p.unit}"
+    >
+      ${p.product_code} / ${p.name}
+    </option>
+  `).join('');
 }
 
 function addRow(){
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td><select class="product" onchange="fillProduct(this)">${productOptions()}</select></td>
-    <td><input class="qty" type="number" min="0" step="1" value="1" oninput="recalc()"></td>
-    <td><input class="unit" value="袋"></td>
-    <td><input class="price" type="number" min="0" step="1" value="0" oninput="recalc()"></td>
-    <td class="line num">0</td>
-    <td><button type="button" class="secondary" onclick="this.closest('tr').remove();recalc()">削除</button></td>
-  `;
-  itemsEl.appendChild(tr);
-  recalc();
+  rows.push({
+    product_code: '',
+    product_name: '',
+    quantity: 1,
+    unit: '袋',
+    unit_price: 0
+  });
+  renderRows();
 }
 
-function fillProduct(sel){
-  const opt = sel.options[sel.selectedIndex];
-  const tr = sel.closest('tr');
-  tr.querySelector('.unit').value = opt.dataset.unit || '袋';
-  tr.querySelector('.price').value = Number(opt.dataset.price || 0);
-  recalc();
+function removeRow(index){
+  rows.splice(index, 1);
+  if (!rows.length) addRow();
+  renderRows();
+}
+
+function updateRow(index, key, value){
+  if (key === 'quantity' || key === 'unit_price') {
+    rows[index][key] = Number(value || 0);
+  } else {
+    rows[index][key] = value;
+  }
+
+  if (key === 'product_code') {
+    const p = PRODUCTS.find(x => x.product_code === value) || {};
+    rows[index].product_code = value;
+    rows[index].product_name = p.name || '';
+    rows[index].unit_price = Number(p.price || 0);
+    rows[index].unit = p.unit || '袋';
+  }
+
+  renderRows();
+}
+
+function lineAmount(row){
+  return Number(row.quantity || 0) * Number(row.unit_price || 0);
 }
 
 function recalc(){
   let subtotal = 0;
-  [...itemsEl.querySelectorAll('tr')].forEach(tr => {
-    const qty = Number(tr.querySelector('.qty').value || 0);
-    const price = Number(tr.querySelector('.price').value || 0);
-    const amount = qty * price;
-    subtotal += amount;
-    tr.querySelector('.line').textContent = amount.toLocaleString('ja-JP');
+  rows.forEach(row => {
+    subtotal += lineAmount(row);
   });
   document.getElementById('subtotal').textContent = subtotal.toLocaleString('ja-JP');
 }
 
+function renderDesktopRows(){
+  itemsEl.innerHTML = rows.map((row, idx) => `
+    <tr>
+      <td>
+        <select onchange="updateRow(${idx}, 'product_code', this.value)">
+          ${productOptions(row.product_code)}
+        </select>
+      </td>
+      <td>
+        <input type="number" min="0" step="1" value="${row.quantity}" oninput="updateRow(${idx}, 'quantity', this.value)">
+      </td>
+      <td>
+        <input value="${row.unit}" oninput="updateRow(${idx}, 'unit', this.value)">
+      </td>
+      <td>
+        <input type="number" min="0" step="1" value="${row.unit_price}" oninput="updateRow(${idx}, 'unit_price', this.value)">
+      </td>
+      <td class="num">${lineAmount(row).toLocaleString('ja-JP')}</td>
+      <td>
+        <button type="button" class="danger" onclick="removeRow(${idx})">削除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderMobileRows(){
+  mobileItemsEl.innerHTML = rows.map((row, idx) => `
+    <div class="item-card">
+      <div class="item-top">
+        <div>
+          <div class="item-title">${row.product_name || '商品を選択'}</div>
+          <div class="item-code">${row.product_code || ''}</div>
+        </div>
+        <button type="button" class="danger" onclick="removeRow(${idx})" style="width:auto;padding:10px 12px;">削除</button>
+      </div>
+
+      <div style="margin-bottom:10px;">
+        <label>商品</label>
+        <select onchange="updateRow(${idx}, 'product_code', this.value)">
+          ${productOptions(row.product_code)}
+        </select>
+      </div>
+
+      <div class="item-grid">
+        <div>
+          <label>数量</label>
+          <input type="number" min="0" step="1" value="${row.quantity}" oninput="updateRow(${idx}, 'quantity', this.value)">
+        </div>
+        <div>
+          <label>単位</label>
+          <input value="${row.unit}" oninput="updateRow(${idx}, 'unit', this.value)">
+        </div>
+        <div>
+          <label>単価</label>
+          <input type="number" min="0" step="1" value="${row.unit_price}" oninput="updateRow(${idx}, 'unit_price', this.value)">
+        </div>
+      </div>
+
+      <div class="line-amount">
+        金額: ${lineAmount(row).toLocaleString('ja-JP')} 円
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRows(){
+  renderDesktopRows();
+  renderMobileRows();
+  recalc();
+}
+
 async function submitOrder(){
-  const rows = [...itemsEl.querySelectorAll('tr')];
-  const items = rows.map(tr => {
-    const code = tr.querySelector('.product').value;
-    const p = PRODUCTS.find(x => x.product_code === code) || {};
+  const items = rows.map(row => {
+    const p = PRODUCTS.find(x => x.product_code === row.product_code) || {};
     return {
-      product_code: code,
-      product_name: p.name || '',
-      quantity: Number(tr.querySelector('.qty').value || 0),
-      unit: tr.querySelector('.unit').value || '袋',
-      unit_price: Number(tr.querySelector('.price').value || 0),
+      product_code: row.product_code,
+      product_name: row.product_name || p.name || '',
+      quantity: Number(row.quantity || 0),
+      unit: row.unit || '袋',
+      unit_price: Number(row.unit_price || 0),
       tax_rate: Number(p.tax_rate || 8)
     };
   }).filter(x => x.product_code && x.quantity > 0);
@@ -146,14 +493,24 @@ async function submitOrder(){
   };
 
   const res = await fetch('/api/orders', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
   });
+
   const data = await res.json();
   if (!data.ok) return showMsg('エラー: ' + data.error);
-  showMsg(`注文を保存しました\n注文番号: ${data.order_no}\n管理画面で納品書発行してください`);
+
+  showMsg(`注文を保存しました
+注文番号: ${data.order_no}
+管理画面で納品書発行してください`);
 }
 
-function showMsg(text){ msgEl.style.display='block'; msgEl.textContent=text; }
+function showMsg(text){
+  msgEl.style.display='block';
+  msgEl.textContent=text;
+}
+
 boot();
 </script>
 </body>
