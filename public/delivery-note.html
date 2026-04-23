@@ -1,508 +1,139 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>納品書</title>
-  <style>
-    :root{
-      --bg:#f6f7fb;
-      --card:#ffffff;
-      --ink:#111827;
-      --muted:#6b7280;
-      --line:#e5e7eb;
-      --primary:#111827;
-      --ok:#047857;
-      --warn:#b45309;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>納品書</title>
 
-    *{box-sizing:border-box}
+<style>
+body{
+  margin:0;
+  background:#fff;
+  color:#000;
+  font-family:system-ui;
+}
 
-    body{
-      margin:0;
-      background:var(--bg);
-      color:var(--ink);
-      font-family:system-ui,sans-serif;
-    }
+.wrap{
+  max-width:900px;
+  margin:0 auto;
+  padding:12px;
+}
 
-    .wrap{
-      max-width:900px;
-      margin:0 auto;
-      padding:12px;
-    }
+.card{
+  border:1px solid #000;
+  padding:14px;
+  margin-bottom:12px;
+}
 
-    .card{
-      background:var(--card);
-      border-radius:16px;
-      box-shadow:0 8px 24px rgba(0,0,0,.08);
-      padding:16px;
-      margin-bottom:14px;
-    }
+h1{
+  font-size:22px;
+  margin-bottom:10px;
+}
 
-    h1,h2,h3,p{
-      margin:0;
-    }
+.meta{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  font-size:14px;
+}
 
-    h1{
-      font-size:24px;
-      margin-bottom:12px;
-    }
+.meta div{
+  border:1px solid #000;
+  padding:8px;
+}
 
-    h2{
-      font-size:18px;
-      margin-bottom:12px;
-    }
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
 
-    .muted{
-      color:var(--muted);
-      font-size:13px;
-    }
+th, td{
+  border:1px solid #000;
+  padding:8px;
+  font-size:14px;
+}
 
-    .badge{
-      display:inline-block;
-      padding:4px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-      border:1px solid var(--line);
-    }
+th{
+  text-align:center;
+}
 
-    .badge-issued{
-      background:#ecfdf5;
-      color:var(--ok);
-      border-color:#a7f3d0;
-    }
+.num{
+  text-align:right;
+}
 
-    .badge-signed{
-      background:#eff6ff;
-      color:#1d4ed8;
-      border-color:#bfdbfe;
-    }
+.sign-area{
+  margin-top:16px;
+}
 
-    .top-head{
-      display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:14px;
-    }
+input{
+  width:100%;
+  padding:10px;
+  border:1px solid #000;
+  margin-bottom:8px;
+}
 
-    .meta-grid{
-      display:grid;
-      grid-template-columns:repeat(2,minmax(0,1fr));
-      gap:12px;
-    }
+canvas{
+  width:100%;
+  height:200px;
+  border:1px solid #000;
+}
 
-    .field{
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:12px;
-      background:#fff;
-    }
-
-    .field-label{
-      font-size:12px;
-      color:var(--muted);
-      margin-bottom:6px;
-    }
-
-    .field-value{
-      font-size:15px;
-      font-weight:700;
-      line-height:1.5;
-      word-break:break-word;
-    }
-
-    .desktop-items{
-      display:block;
-    }
-
-    .desktop-items table{
-      width:100%;
-      border-collapse:collapse;
-    }
-
-    .desktop-items th,
-    .desktop-items td{
-      padding:10px 8px;
-      border-bottom:1px solid var(--line);
-      text-align:left;
-      vertical-align:top;
-      font-size:14px;
-    }
-
-    .desktop-items th.num,
-    .desktop-items td.num{
-      text-align:right;
-    }
-
-    .mobile-items{
-      display:none;
-    }
-
-    .item-card{
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:12px;
-      margin-bottom:10px;
-      background:#fff;
-    }
-
-    .item-name{
-      font-weight:700;
-      font-size:15px;
-      margin-bottom:4px;
-    }
-
-    .item-code{
-      color:var(--muted);
-      font-size:12px;
-      margin-bottom:8px;
-    }
-
-    .item-grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:8px;
-      margin-top:8px;
-    }
-
-    .item-box{
-      background:#f9fafb;
-      border:1px solid var(--line);
-      border-radius:10px;
-      padding:10px;
-    }
-
-    .item-box .k{
-      font-size:12px;
-      color:var(--muted);
-      margin-bottom:4px;
-    }
-
-    .item-box .v{
-      font-size:15px;
-      font-weight:700;
-    }
-
-    .totals{
-      margin-top:14px;
-      display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr));
-      gap:10px;
-    }
-
-    .total-box{
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:12px;
-      background:#fff;
-      text-align:right;
-    }
-
-    .total-box .k{
-      font-size:12px;
-      color:var(--muted);
-      margin-bottom:6px;
-      text-align:left;
-    }
-
-    .total-box .v{
-      font-size:18px;
-      font-weight:800;
-    }
-
-    .sign-box{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:12px;
-      margin-bottom:12px;
-    }
-
-    label{
-      display:block;
-      font-size:13px;
-      font-weight:700;
-      margin-bottom:6px;
-    }
-
-    input, textarea, button{
-      width:100%;
-      box-sizing:border-box;
-      font-size:16px;
-      border-radius:12px;
-    }
-
-    input, textarea{
-      border:1px solid #d1d5db;
-      padding:12px;
-      background:#fff;
-    }
-
-    textarea{
-      min-height:90px;
-      resize:vertical;
-    }
-
-    button{
-      border:0;
-      background:var(--primary);
-      color:#fff;
-      font-weight:700;
-      padding:14px;
-      cursor:pointer;
-    }
-
-    button.secondary{
-      background:#eef2ff;
-      color:var(--ink);
-    }
-
-    button[disabled]{
-      opacity:.6;
-      cursor:not-allowed;
-    }
-
-    .canvas-wrap{
-      border:1px solid var(--line);
-      border-radius:12px;
-      overflow:hidden;
-      background:#fff;
-    }
-
-    canvas{
-      display:block;
-      width:100%;
-      height:220px;
-      touch-action:none;
-      background:#fff;
-    }
-
-    .canvas-actions{
-      display:flex;
-      gap:10px;
-      padding:10px;
-      border-top:1px solid var(--line);
-      background:#f9fafb;
-    }
-
-    .canvas-actions button{
-      padding:10px 12px;
-    }
-
-    .msg{
-      margin-top:12px;
-      padding:12px;
-      border-radius:12px;
-      background:#f3f4f6;
-      display:none;
-      white-space:pre-wrap;
-      font-size:14px;
-    }
-
-    .signed-box{
-      border:1px solid #bfdbfe;
-      background:#eff6ff;
-      border-radius:12px;
-      padding:12px;
-      margin-top:12px;
-    }
-
-    .sticky-footer{
-      position:sticky;
-      bottom:0;
-      padding-top:12px;
-      margin-top:12px;
-      background:#fff;
-    }
-
-    @media print{
-      body{
-        background:#fff;
-      }
-      .wrap{
-        max-width:none;
-        padding:0;
-      }
-      .card{
-        box-shadow:none;
-        border:0;
-        border-radius:0;
-        padding:0;
-      }
-      .sign-area,
-      .sticky-footer,
-      .msg{
-        display:none !important;
-      }
-      .desktop-items{
-        display:block !important;
-      }
-      .mobile-items{
-        display:none !important;
-      }
-    }
-
-    @media (max-width:768px){
-      .wrap{
-        padding:10px;
-      }
-
-      .card{
-        padding:14px;
-        border-radius:14px;
-      }
-
-      h1{
-        font-size:20px;
-      }
-
-      .top-head{
-        flex-direction:column;
-        align-items:flex-start;
-      }
-
-      .meta-grid{
-        grid-template-columns:1fr;
-      }
-
-      .desktop-items{
-        display:none;
-      }
-
-      .mobile-items{
-        display:block;
-      }
-
-      .totals{
-        grid-template-columns:1fr;
-      }
-
-      .sign-box{
-        grid-template-columns:1fr;
-      }
-
-      .item-grid{
-        grid-template-columns:1fr 1fr;
-      }
-
-      .canvas-actions{
-        flex-direction:column;
-      }
-
-      .canvas-actions button{
-        width:100%;
-      }
-    }
-  </style>
+button{
+  width:100%;
+  padding:12px;
+  border:1px solid #000;
+  background:#fff;
+  font-weight:700;
+}
+</style>
 </head>
+
 <body>
 <div class="wrap">
-  <div class="card">
-    <div class="top-head">
-      <div>
-        <h1>納品書</h1>
-        <div class="muted" id="noteNo">読込中...</div>
-      </div>
-      <div id="statusBadge"></div>
-    </div>
 
-    <div class="meta-grid">
-      <div class="field">
-        <div class="field-label">得意先</div>
-        <div class="field-value" id="customerName"></div>
-      </div>
-      <div class="field">
-        <div class="field-label">担当者</div>
-        <div class="field-value" id="contactName"></div>
-      </div>
-      <div class="field">
-        <div class="field-label">電話</div>
-        <div class="field-value" id="phone"></div>
-      </div>
-      <div class="field">
-        <div class="field-label">納品日</div>
-        <div class="field-value" id="deliveryDate"></div>
-      </div>
-      <div class="field" style="grid-column:1 / -1;">
-        <div class="field-label">住所</div>
-        <div class="field-value" id="address"></div>
-      </div>
-      <div class="field" style="grid-column:1 / -1;">
-        <div class="field-label">備考</div>
-        <div class="field-value" id="memo"></div>
-      </div>
-    </div>
+<div class="card">
+  <h1>納品書</h1>
+  <div id="noteNo"></div>
+
+  <div class="meta">
+    <div>得意先<br><span id="customerName"></span></div>
+    <div>担当者<br><span id="contactName"></span></div>
+    <div>電話<br><span id="phone"></span></div>
+    <div>納品日<br><span id="deliveryDate"></span></div>
+    <div style="grid-column:1/-1;">住所<br><span id="address"></span></div>
   </div>
+</div>
 
-  <div class="card">
-    <h2>明細</h2>
+<div class="card">
+  <h2>明細</h2>
 
-    <div class="desktop-items">
-      <table>
-        <thead>
-          <tr>
-            <th>商品名</th>
-            <th>商品コード</th>
-            <th class="num">数量</th>
-            <th class="num">単価</th>
-            <th class="num">金額</th>
-          </tr>
-        </thead>
-        <tbody id="itemsTableBody"></tbody>
-      </table>
-    </div>
+  <table>
+    <thead>
+      <tr>
+        <th>商品名</th>
+        <th>個数</th>
+      </tr>
+    </thead>
+    <tbody id="itemsTableBody"></tbody>
+  </table>
 
-    <div id="mobileItems" class="mobile-items"></div>
+  <div id="signedInfo"></div>
+</div>
 
-    <div class="totals">
-      <div class="total-box">
-        <div class="k">小計</div>
-        <div class="v" id="subtotal"></div>
-      </div>
-      <div class="total-box">
-        <div class="k">消費税</div>
-        <div class="v" id="taxAmount"></div>
-      </div>
-      <div class="total-box">
-        <div class="k">合計</div>
-        <div class="v" id="totalAmount"></div>
-      </div>
-    </div>
+<div class="card sign-area" id="signArea">
+  <h2>受領サイン</h2>
 
-    <div id="signedInfo" class="signed-box" style="display:none;"></div>
-  </div>
+  <input id="receivedBy" placeholder="受領者名">
+  <input id="signerName" placeholder="署名者名">
 
-  <div class="card sign-area" id="signArea">
-    <h2>受領サイン</h2>
+  <canvas id="sigCanvas"></canvas>
 
-    <div class="sign-box">
-      <div>
-        <label for="receivedBy">受領者名</label>
-        <input id="receivedBy" placeholder="受け取った方のお名前">
-      </div>
-      <div>
-        <label for="signerName">サイン名</label>
-        <input id="signerName" placeholder="署名者名">
-      </div>
-    </div>
+  <button onclick="submitSignature()">送信</button>
 
-    <div>
-      <label>サイン</label>
-      <div class="canvas-wrap">
-        <canvas id="sigCanvas"></canvas>
-        <div class="canvas-actions">
-          <button type="button" class="secondary" onclick="clearSignature()">サインを消す</button>
-        </div>
-      </div>
-    </div>
+  <div id="msg"></div>
+</div>
 
-    <div class="sticky-footer">
-      <button id="submitBtn" type="button" onclick="submitSignature()">受領確認を送信</button>
-    </div>
-
-    <div id="msg" class="msg"></div>
-  </div>
 </div>
 
 <script>
@@ -513,256 +144,74 @@ let drawing = false;
 let signedOnce = false;
 
 function getToken(){
-  const url = new URL(window.location.href);
-  return url.searchParams.get('token') || '';
-}
-
-function yen(v){
-  return Number(v || 0).toLocaleString('ja-JP') + ' 円';
-}
-
-function showMsg(text){
-  const el = document.getElementById('msg');
-  el.style.display = 'block';
-  el.textContent = text;
-}
-
-function setStatusBadge(status){
-  const s = String(status || '').toLowerCase();
-  const el = document.getElementById('statusBadge');
-  if (s === 'signed') {
-    el.innerHTML = '<span class="badge badge-signed">受領済み</span>';
-  } else {
-    el.innerHTML = '<span class="badge badge-issued">発行済み</span>';
-  }
-}
-
-function joinAddress(note){
-  return [
-    note.zip,
-    note.pref,
-    note.city,
-    note.addr1,
-    note.addr2
-  ].filter(Boolean).join(' ');
+  return new URL(location.href).searchParams.get('token');
 }
 
 function renderHeader(note){
-  document.getElementById('noteNo').textContent = note.delivery_note_no || '';
-  document.getElementById('customerName').textContent = note.customer_name || '';
-  document.getElementById('contactName').textContent = note.contact_name || '';
-  document.getElementById('phone').textContent = note.phone || '';
-  document.getElementById('deliveryDate').textContent = (note.delivery_date || note.issue_date || '').slice(0, 10);
-  document.getElementById('address').textContent = joinAddress(note) || '―';
-  document.getElementById('memo').textContent = note.memo || '―';
-  setStatusBadge(note.status);
+  noteNo.textContent = note.delivery_note_no || '';
+  customerName.textContent = note.customer_name || '';
+  contactName.textContent = note.contact_name || '';
+  phone.textContent = note.phone || '';
+  deliveryDate.textContent = (note.delivery_date||'').slice(0,10);
+  address.textContent = [note.addr1,note.addr2].filter(Boolean).join(' ');
 }
 
 function renderItems(items){
-  document.getElementById('itemsTableBody').innerHTML = items.map(item => `
+  itemsTableBody.innerHTML = items.map(i=>`
     <tr>
-      <td>${item.product_name || ''}</td>
-      <td>${item.product_code || ''}</td>
-      <td class="num">${Number(item.quantity || 0).toLocaleString('ja-JP')}</td>
-      <td class="num">${yen(item.unit_price || 0)}</td>
-      <td class="num">${yen(item.line_amount || 0)}</td>
+      <td>${i.product_name||''}</td>
+      <td class="num">${i.quantity||0}</td>
     </tr>
   `).join('');
-
-  document.getElementById('mobileItems').innerHTML = items.map(item => `
-    <div class="item-card">
-      <div class="item-name">${item.product_name || ''}</div>
-      <div class="item-code">${item.product_code || ''}</div>
-      <div class="item-grid">
-        <div class="item-box">
-          <div class="k">数量</div>
-          <div class="v">${Number(item.quantity || 0).toLocaleString('ja-JP')}</div>
-        </div>
-        <div class="item-box">
-          <div class="k">単価</div>
-          <div class="v">${yen(item.unit_price || 0)}</div>
-        </div>
-        <div class="item-box" style="grid-column:1 / -1;">
-          <div class="k">金額</div>
-          <div class="v">${yen(item.line_amount || 0)}</div>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderTotals(note){
-  document.getElementById('subtotal').textContent = yen(note.subtotal || 0);
-  document.getElementById('taxAmount').textContent = yen(note.tax_amount || 0);
-  document.getElementById('totalAmount').textContent = yen(note.total_amount || 0);
-}
-
-function renderReceipt(receipt){
-  if (!receipt) return;
-
-  const box = document.getElementById('signedInfo');
-  box.style.display = 'block';
-  box.innerHTML = `
-    <div><strong>受領者:</strong> ${receipt.received_by || ''}</div>
-    <div><strong>署名:</strong> ${receipt.signer_name || ''}</div>
-    <div><strong>受領時刻:</strong> ${(receipt.received_at || '').replace('T', ' ').slice(0, 19)}</div>
-  `;
-
-  document.getElementById('signArea').style.display = 'none';
 }
 
 async function loadNote(){
   const token = getToken();
-  if (!token) {
-    showMsg('token がありません');
-    return;
-  }
+  if(!token) return;
 
-  const res = await fetch(`/api/dn/delivery-notes/view/${encodeURIComponent(token)}`);
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok || !data.ok) {
-    showMsg('納品書の取得に失敗しました');
-    return;
-  }
+  const res = await fetch(`/api/dn/delivery-notes/view/${token}`);
+  const data = await res.json();
 
   noteData = data;
   renderHeader(data.delivery_note);
-  renderItems(data.items || []);
-  renderTotals(data.delivery_note);
-  renderReceipt(data.receipt);
-
-  if (data.delivery_note?.status === 'signed') {
-    document.getElementById('signArea').style.display = 'none';
-  }
-}
-
-function resizeCanvas(){
-  const ratio = window.devicePixelRatio || 1;
-  const rect = sigCanvas.getBoundingClientRect();
-  sigCanvas.width = rect.width * ratio;
-  sigCanvas.height = rect.height * ratio;
-  sigCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  sigCtx.lineWidth = 2;
-  sigCtx.lineCap = 'round';
-  sigCtx.lineJoin = 'round';
-  sigCtx.strokeStyle = '#111827';
-}
-
-function getPoint(e){
-  const rect = sigCanvas.getBoundingClientRect();
-  if (e.touches && e.touches[0]) {
-    return {
-      x: e.touches[0].clientX - rect.left,
-      y: e.touches[0].clientY - rect.top
-    };
-  }
-  return {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top
-  };
-}
-
-function startDraw(e){
-  drawing = true;
-  signedOnce = true;
-  const p = getPoint(e);
-  sigCtx.beginPath();
-  sigCtx.moveTo(p.x, p.y);
-  e.preventDefault();
-}
-
-function moveDraw(e){
-  if (!drawing) return;
-  const p = getPoint(e);
-  sigCtx.lineTo(p.x, p.y);
-  sigCtx.stroke();
-  e.preventDefault();
-}
-
-function endDraw(e){
-  drawing = false;
-  e.preventDefault();
-}
-
-function clearSignature(){
-  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-  signedOnce = false;
-}
-
-async function submitSignature(){
-  if (!noteData?.delivery_note?.id) return;
-
-  const receivedBy = document.getElementById('receivedBy').value.trim();
-  const signerName = document.getElementById('signerName').value.trim();
-
-  if (!receivedBy) {
-    showMsg('受領者名を入力してください');
-    return;
-  }
-  if (!signerName) {
-    showMsg('サイン名を入力してください');
-    return;
-  }
-  if (!signedOnce) {
-    showMsg('サインを入力してください');
-    return;
-  }
-
-  const btn = document.getElementById('submitBtn');
-  btn.disabled = true;
-  btn.textContent = '送信中...';
-
-  try {
-    const dataUrl = sigCanvas.toDataURL('image/png');
-
-    const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(noteData.delivery_note.id)}/sign`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        received_by: receivedBy,
-        signer_name: signerName,
-        signature_data_url: dataUrl,
-        signed_device: navigator.userAgent
-      })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || 'sign_failed');
-    }
-
-    showMsg('受領確認を送信しました');
-    await loadNote();
-  } catch (e) {
-    console.error(e);
-    showMsg('送信エラー: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '受領確認を送信';
-  }
+  renderItems(data.items||[]);
 }
 
 function initCanvas(){
   sigCanvas = document.getElementById('sigCanvas');
   sigCtx = sigCanvas.getContext('2d');
 
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  sigCanvas.addEventListener('mousedown', ()=>drawing=true);
+  sigCanvas.addEventListener('mouseup', ()=>drawing=false);
 
-  sigCanvas.addEventListener('mousedown', startDraw);
-  sigCanvas.addEventListener('mousemove', moveDraw);
-  sigCanvas.addEventListener('mouseup', endDraw);
-  sigCanvas.addEventListener('mouseleave', endDraw);
+  sigCanvas.addEventListener('mousemove', e=>{
+    if(!drawing) return;
+    sigCtx.fillRect(e.offsetX,e.offsetY,2,2);
+    signedOnce=true;
+  });
+}
 
-  sigCanvas.addEventListener('touchstart', startDraw, { passive:false });
-  sigCanvas.addEventListener('touchmove', moveDraw, { passive:false });
-  sigCanvas.addEventListener('touchend', endDraw, { passive:false });
+async function submitSignature(){
+  if(!signedOnce) return alert('サインしてください');
+
+  const dataUrl = sigCanvas.toDataURL();
+
+  await fetch(`/api/dn/delivery-notes/${noteData.delivery_note.id}/sign`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      received_by: receivedBy.value,
+      signer_name: signerName.value,
+      signature_data_url: dataUrl
+    })
+  });
+
+  msg.textContent='送信しました';
 }
 
 initCanvas();
 loadNote();
 </script>
+
 </body>
 </html>
