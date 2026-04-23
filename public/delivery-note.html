@@ -5,155 +5,214 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>納品書</title>
   <style>
-    *{ box-sizing:border-box; }
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --ink:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --primary:#111827;
+      --ok:#047857;
+      --warn:#b45309;
+    }
+
+    *{box-sizing:border-box}
 
     body{
       margin:0;
-      background:#fff;
-      color:#000;
-      font-family:"Yu Gothic","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
-      font-size:14px;
-      line-height:1.5;
+      background:var(--bg);
+      color:var(--ink);
+      font-family:system-ui,sans-serif;
     }
 
-    .page{
-      max-width:980px;
+    .wrap{
+      max-width:900px;
       margin:0 auto;
-      padding:16px;
+      padding:12px;
     }
 
-    .sheet{
-      border:1px solid #000;
+    .card{
+      background:var(--card);
+      border-radius:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,.08);
       padding:16px;
+      margin-bottom:14px;
     }
 
     h1,h2,h3,p{
       margin:0;
     }
 
-    .title-row{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      gap:12px;
-      margin-bottom:16px;
-      padding-bottom:10px;
-      border-bottom:2px solid #000;
+    h1{
+      font-size:24px;
+      margin-bottom:12px;
     }
 
-    .title{
-      font-size:28px;
-      font-weight:700;
-      letter-spacing:.08em;
+    h2{
+      font-size:18px;
+      margin-bottom:12px;
     }
 
-    .note-no{
+    .muted{
+      color:var(--muted);
       font-size:13px;
-      margin-top:6px;
     }
 
-    .status{
-      border:1px solid #000;
-      padding:6px 10px;
+    .badge{
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:999px;
       font-size:12px;
       font-weight:700;
-      white-space:nowrap;
+      border:1px solid var(--line);
     }
 
-    .section{
-      margin-top:18px;
+    .badge-issued{
+      background:#ecfdf5;
+      color:var(--ok);
+      border-color:#a7f3d0;
     }
 
-    .section-title{
-      font-size:16px;
-      font-weight:700;
-      border-left:6px solid #000;
-      padding-left:8px;
-      margin-bottom:10px;
+    .badge-signed{
+      background:#eff6ff;
+      color:#1d4ed8;
+      border-color:#bfdbfe;
     }
 
-    .info-table{
-      width:100%;
-      border-collapse:collapse;
-      table-layout:fixed;
+    .top-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
     }
 
-    .info-table th,
-    .info-table td{
-      border:1px solid #000;
-      padding:8px 10px;
-      vertical-align:top;
-      word-break:break-word;
+    .meta-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:12px;
     }
 
-    .info-table th{
-      width:140px;
+    .field{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
       background:#fff;
-      text-align:left;
+    }
+
+    .field-label{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+
+    .field-value{
+      font-size:15px;
       font-weight:700;
-    }
-
-    .items-table{
-      width:100%;
-      border-collapse:collapse;
-      table-layout:fixed;
-    }
-
-    .items-table th,
-    .items-table td{
-      border:1px solid #000;
-      padding:8px 6px;
-      vertical-align:middle;
+      line-height:1.5;
       word-break:break-word;
     }
 
-    .items-table th{
-      text-align:center;
-      font-weight:700;
+    .desktop-items{
+      display:block;
     }
 
-    .num{
+    .desktop-items table{
+      width:100%;
+      border-collapse:collapse;
+    }
+
+    .desktop-items th,
+    .desktop-items td{
+      padding:10px 8px;
+      border-bottom:1px solid var(--line);
+      text-align:left;
+      vertical-align:top;
+      font-size:14px;
+    }
+
+    .desktop-items th.num,
+    .desktop-items td.num{
       text-align:right;
-      white-space:nowrap;
+    }
+
+    .mobile-items{
+      display:none;
+    }
+
+    .item-card{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+      margin-bottom:10px;
+      background:#fff;
+    }
+
+    .item-name{
+      font-weight:700;
+      font-size:15px;
+      margin-bottom:4px;
+    }
+
+    .item-code{
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:8px;
+    }
+
+    .item-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .item-box{
+      background:#f9fafb;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:10px;
+    }
+
+    .item-box .k{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:4px;
+    }
+
+    .item-box .v{
+      font-size:15px;
+      font-weight:700;
     }
 
     .totals{
-      width:360px;
-      margin-left:auto;
-      margin-top:12px;
-      border-collapse:collapse;
+      margin-top:14px;
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:10px;
     }
 
-    .totals th,
-    .totals td{
-      border:1px solid #000;
-      padding:8px 10px;
-    }
-
-    .totals th{
-      text-align:left;
-      width:45%;
-      font-weight:700;
-    }
-
-    .totals td{
+    .total-box{
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px;
+      background:#fff;
       text-align:right;
-      font-weight:700;
     }
 
-    .signed-box{
-      border:1px solid #000;
-      padding:10px;
-      margin-top:12px;
+    .total-box .k{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+      text-align:left;
     }
 
-    .sign-area{
-      margin-top:20px;
-      border-top:2px solid #000;
-      padding-top:16px;
+    .total-box .v{
+      font-size:18px;
+      font-weight:800;
     }
 
-    .sign-grid{
+    .sign-box{
       display:grid;
       grid-template-columns:1fr 1fr;
       gap:12px;
@@ -162,57 +221,41 @@
 
     label{
       display:block;
+      font-size:13px;
       font-weight:700;
       margin-bottom:6px;
     }
 
     input, textarea, button{
       width:100%;
+      box-sizing:border-box;
       font-size:16px;
-      font-family:inherit;
+      border-radius:12px;
     }
 
     input, textarea{
-      border:1px solid #000;
-      padding:10px;
-      border-radius:0;
+      border:1px solid #d1d5db;
+      padding:12px;
       background:#fff;
-      color:#000;
     }
 
     textarea{
-      min-height:80px;
+      min-height:90px;
       resize:vertical;
     }
 
-    .canvas-wrap{
-      border:1px solid #000;
-      background:#fff;
-    }
-
-    canvas{
-      display:block;
-      width:100%;
-      height:220px;
-      background:#fff;
-      touch-action:none;
-    }
-
-    .canvas-actions{
-      display:flex;
-      gap:8px;
-      padding:8px;
-      border-top:1px solid #000;
-    }
-
     button{
-      border:1px solid #000;
-      border-radius:0;
-      background:#fff;
-      color:#000;
-      padding:10px 12px;
+      border:0;
+      background:var(--primary);
+      color:#fff;
       font-weight:700;
+      padding:14px;
       cursor:pointer;
+    }
+
+    button.secondary{
+      background:#eef2ff;
+      color:var(--ink);
     }
 
     button[disabled]{
@@ -220,198 +263,245 @@
       cursor:not-allowed;
     }
 
-    .submit-row{
-      margin-top:12px;
+    .canvas-wrap{
+      border:1px solid var(--line);
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
+
+    canvas{
+      display:block;
+      width:100%;
+      height:220px;
+      touch-action:none;
+      background:#fff;
+    }
+
+    .canvas-actions{
+      display:flex;
+      gap:10px;
+      padding:10px;
+      border-top:1px solid var(--line);
+      background:#f9fafb;
+    }
+
+    .canvas-actions button{
+      padding:10px 12px;
     }
 
     .msg{
       margin-top:12px;
-      padding:10px;
-      border:1px solid #000;
+      padding:12px;
+      border-radius:12px;
+      background:#f3f4f6;
       display:none;
       white-space:pre-wrap;
+      font-size:14px;
     }
 
-    .footer-note{
-      margin-top:18px;
-      border-top:1px solid #000;
-      padding-top:10px;
-      font-size:12px;
+    .signed-box{
+      border:1px solid #bfdbfe;
+      background:#eff6ff;
+      border-radius:12px;
+      padding:12px;
+      margin-top:12px;
     }
 
-    @media (max-width: 768px){
-      .page{
+    .sticky-footer{
+      position:sticky;
+      bottom:0;
+      padding-top:12px;
+      margin-top:12px;
+      background:#fff;
+    }
+
+    @media print{
+      body{
+        background:#fff;
+      }
+      .wrap{
+        max-width:none;
+        padding:0;
+      }
+      .card{
+        box-shadow:none;
+        border:0;
+        border-radius:0;
+        padding:0;
+      }
+      .sign-area,
+      .sticky-footer,
+      .msg{
+        display:none !important;
+      }
+      .desktop-items{
+        display:block !important;
+      }
+      .mobile-items{
+        display:none !important;
+      }
+    }
+
+    @media (max-width:768px){
+      .wrap{
         padding:10px;
       }
 
-      .sheet{
-        padding:12px;
+      .card{
+        padding:14px;
+        border-radius:14px;
       }
 
-      .title-row{
-        display:block;
+      h1{
+        font-size:20px;
       }
 
-      .title{
-        font-size:24px;
+      .top-head{
+        flex-direction:column;
+        align-items:flex-start;
       }
 
-      .status{
-        display:inline-block;
-        margin-top:10px;
-      }
-
-      .info-table th,
-      .info-table td,
-      .items-table th,
-      .items-table td{
-        font-size:13px;
-        padding:7px 5px;
-      }
-
-      .sign-grid{
+      .meta-grid{
         grid-template-columns:1fr;
       }
 
-      .totals{
-        width:100%;
+      .desktop-items{
+        display:none;
       }
 
-      canvas{
-        height:180px;
+      .mobile-items{
+        display:block;
+      }
+
+      .totals{
+        grid-template-columns:1fr;
+      }
+
+      .sign-box{
+        grid-template-columns:1fr;
+      }
+
+      .item-grid{
+        grid-template-columns:1fr 1fr;
       }
 
       .canvas-actions{
         flex-direction:column;
       }
-    }
 
-    @media print{
-      .page{
-        max-width:none;
-        padding:0;
-      }
-
-      .sheet{
-        border:0;
-        padding:0;
-      }
-
-      .sign-area,
-      .msg{
-        display:none !important;
-      }
-
-      button{
-        display:none !important;
+      .canvas-actions button{
+        width:100%;
       }
     }
   </style>
 </head>
 <body>
-<div class="page">
-  <div class="sheet">
-    <div class="title-row">
+<div class="wrap">
+  <div class="card">
+    <div class="top-head">
       <div>
-        <div class="title">納 品 書</div>
-        <div class="note-no" id="noteNo">読込中...</div>
+        <h1>納品書</h1>
+        <div class="muted" id="noteNo">読込中...</div>
       </div>
-      <div class="status" id="statusBadge">発行済み</div>
+      <div id="statusBadge"></div>
     </div>
 
-    <div class="section">
-      <div class="section-title">納品先情報</div>
-      <table class="info-table">
-        <tr>
-          <th>得意先</th>
-          <td id="customerName"></td>
-          <th>担当者</th>
-          <td id="contactName"></td>
-        </tr>
-        <tr>
-          <th>電話</th>
-          <td id="phone"></td>
-          <th>納品日</th>
-          <td id="deliveryDate"></td>
-        </tr>
-        <tr>
-          <th>住所</th>
-          <td colspan="3" id="address"></td>
-        </tr>
-        <tr>
-          <th>備考</th>
-          <td colspan="3" id="memo"></td>
-        </tr>
-      </table>
+    <div class="meta-grid">
+      <div class="field">
+        <div class="field-label">得意先</div>
+        <div class="field-value" id="customerName"></div>
+      </div>
+      <div class="field">
+        <div class="field-label">担当者</div>
+        <div class="field-value" id="contactName"></div>
+      </div>
+      <div class="field">
+        <div class="field-label">電話</div>
+        <div class="field-value" id="phone"></div>
+      </div>
+      <div class="field">
+        <div class="field-label">納品日</div>
+        <div class="field-value" id="deliveryDate"></div>
+      </div>
+      <div class="field" style="grid-column:1 / -1;">
+        <div class="field-label">住所</div>
+        <div class="field-value" id="address"></div>
+      </div>
+      <div class="field" style="grid-column:1 / -1;">
+        <div class="field-label">備考</div>
+        <div class="field-value" id="memo"></div>
+      </div>
     </div>
+  </div>
 
-    <div class="section">
-      <div class="section-title">明細</div>
-      <table class="items-table">
+  <div class="card">
+    <h2>明細</h2>
+
+    <div class="desktop-items">
+      <table>
         <thead>
           <tr>
-            <th style="width:34%">商品名</th>
-            <th style="width:18%">商品コード</th>
-            <th style="width:12%">数量</th>
-            <th style="width:18%">単価</th>
-            <th style="width:18%">金額</th>
+            <th>商品名</th>
+            <th>商品コード</th>
+            <th class="num">数量</th>
+            <th class="num">単価</th>
+            <th class="num">金額</th>
           </tr>
         </thead>
         <tbody id="itemsTableBody"></tbody>
       </table>
-
-      <table class="totals">
-        <tr>
-          <th>小計</th>
-          <td id="subtotal"></td>
-        </tr>
-        <tr>
-          <th>消費税</th>
-          <td id="taxAmount"></td>
-        </tr>
-        <tr>
-          <th>合計</th>
-          <td id="totalAmount"></td>
-        </tr>
-      </table>
-
-      <div id="signedInfo" class="signed-box" style="display:none;"></div>
     </div>
 
-    <div class="sign-area" id="signArea">
-      <div class="section-title">受領確認</div>
+    <div id="mobileItems" class="mobile-items"></div>
 
-      <div class="sign-grid">
-        <div>
-          <label for="receivedBy">受領者名</label>
-          <input id="receivedBy" placeholder="受け取った方のお名前">
-        </div>
-        <div>
-          <label for="signerName">署名者名</label>
-          <input id="signerName" placeholder="署名者名">
-        </div>
+    <div class="totals">
+      <div class="total-box">
+        <div class="k">小計</div>
+        <div class="v" id="subtotal"></div>
       </div>
+      <div class="total-box">
+        <div class="k">消費税</div>
+        <div class="v" id="taxAmount"></div>
+      </div>
+      <div class="total-box">
+        <div class="k">合計</div>
+        <div class="v" id="totalAmount"></div>
+      </div>
+    </div>
 
+    <div id="signedInfo" class="signed-box" style="display:none;"></div>
+  </div>
+
+  <div class="card sign-area" id="signArea">
+    <h2>受領サイン</h2>
+
+    <div class="sign-box">
       <div>
-        <label>サイン</label>
-        <div class="canvas-wrap">
-          <canvas id="sigCanvas"></canvas>
-          <div class="canvas-actions">
-            <button type="button" onclick="clearSignature()">サインを消す</button>
-          </div>
+        <label for="receivedBy">受領者名</label>
+        <input id="receivedBy" placeholder="受け取った方のお名前">
+      </div>
+      <div>
+        <label for="signerName">サイン名</label>
+        <input id="signerName" placeholder="署名者名">
+      </div>
+    </div>
+
+    <div>
+      <label>サイン</label>
+      <div class="canvas-wrap">
+        <canvas id="sigCanvas"></canvas>
+        <div class="canvas-actions">
+          <button type="button" class="secondary" onclick="clearSignature()">サインを消す</button>
         </div>
       </div>
-
-      <div class="submit-row">
-        <button id="submitBtn" type="button" onclick="submitSignature()">受領確認を送信</button>
-      </div>
-
-      <div id="msg" class="msg"></div>
     </div>
 
-    <div class="footer-note">
-      本書は電子納品書です。内容をご確認ください。
+    <div class="sticky-footer">
+      <button id="submitBtn" type="button" onclick="submitSignature()">受領確認を送信</button>
     </div>
+
+    <div id="msg" class="msg"></div>
   </div>
 </div>
 
@@ -440,7 +530,11 @@ function showMsg(text){
 function setStatusBadge(status){
   const s = String(status || '').toLowerCase();
   const el = document.getElementById('statusBadge');
-  el.textContent = (s === 'signed') ? '受領済み' : '発行済み';
+  if (s === 'signed') {
+    el.innerHTML = '<span class="badge badge-signed">受領済み</span>';
+  } else {
+    el.innerHTML = '<span class="badge badge-issued">発行済み</span>';
+  }
 }
 
 function joinAddress(note){
@@ -455,10 +549,10 @@ function joinAddress(note){
 
 function renderHeader(note){
   document.getElementById('noteNo').textContent = note.delivery_note_no || '';
-  document.getElementById('customerName').textContent = note.customer_name || '―';
-  document.getElementById('contactName').textContent = note.contact_name || '―';
-  document.getElementById('phone').textContent = note.phone || '―';
-  document.getElementById('deliveryDate').textContent = (note.delivery_date || note.issue_date || '').slice(0, 10) || '―';
+  document.getElementById('customerName').textContent = note.customer_name || '';
+  document.getElementById('contactName').textContent = note.contact_name || '';
+  document.getElementById('phone').textContent = note.phone || '';
+  document.getElementById('deliveryDate').textContent = (note.delivery_date || note.issue_date || '').slice(0, 10);
   document.getElementById('address').textContent = joinAddress(note) || '―';
   document.getElementById('memo').textContent = note.memo || '―';
   setStatusBadge(note.status);
@@ -473,6 +567,27 @@ function renderItems(items){
       <td class="num">${yen(item.unit_price || 0)}</td>
       <td class="num">${yen(item.line_amount || 0)}</td>
     </tr>
+  `).join('');
+
+  document.getElementById('mobileItems').innerHTML = items.map(item => `
+    <div class="item-card">
+      <div class="item-name">${item.product_name || ''}</div>
+      <div class="item-code">${item.product_code || ''}</div>
+      <div class="item-grid">
+        <div class="item-box">
+          <div class="k">数量</div>
+          <div class="v">${Number(item.quantity || 0).toLocaleString('ja-JP')}</div>
+        </div>
+        <div class="item-box">
+          <div class="k">単価</div>
+          <div class="v">${yen(item.unit_price || 0)}</div>
+        </div>
+        <div class="item-box" style="grid-column:1 / -1;">
+          <div class="k">金額</div>
+          <div class="v">${yen(item.line_amount || 0)}</div>
+        </div>
+      </div>
+    </div>
   `).join('');
 }
 
@@ -531,7 +646,7 @@ function resizeCanvas(){
   sigCtx.lineWidth = 2;
   sigCtx.lineCap = 'round';
   sigCtx.lineJoin = 'round';
-  sigCtx.strokeStyle = '#000';
+  sigCtx.strokeStyle = '#111827';
 }
 
 function getPoint(e){
@@ -586,7 +701,7 @@ async function submitSignature(){
     return;
   }
   if (!signerName) {
-    showMsg('署名者名を入力してください');
+    showMsg('サイン名を入力してください');
     return;
   }
   if (!signedOnce) {
