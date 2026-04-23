@@ -30,6 +30,11 @@ h1{
   margin-bottom:10px;
 }
 
+h2{
+  font-size:18px;
+  margin:0 0 10px;
+}
+
 .meta{
   display:grid;
   grid-template-columns:1fr 1fr;
@@ -71,12 +76,27 @@ input{
   padding:10px;
   border:1px solid #000;
   margin-bottom:8px;
+  box-sizing:border-box;
+}
+
+.canvas-wrap{
+  border:1px solid #000;
+  margin-bottom:8px;
+  background:#fff;
 }
 
 canvas{
+  display:block;
   width:100%;
-  height:200px;
-  border:1px solid #000;
+  height:220px;
+  background:#fff;
+  touch-action:none;
+}
+
+.actions{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
 }
 
 button{
@@ -85,6 +105,27 @@ button{
   border:1px solid #000;
   background:#fff;
   font-weight:700;
+  cursor:pointer;
+}
+
+#msg{
+  margin-top:8px;
+  white-space:pre-wrap;
+  font-size:14px;
+}
+
+@media (max-width:768px){
+  .meta{
+    grid-template-columns:1fr;
+  }
+
+  canvas{
+    height:180px;
+  }
+
+  .actions{
+    flex-direction:column;
+  }
 }
 </style>
 </head>
@@ -92,47 +133,52 @@ button{
 <body>
 <div class="wrap">
 
-<div class="card">
-  <h1>納品書</h1>
-  <div id="noteNo"></div>
+  <div class="card">
+    <h1>納品書</h1>
+    <div id="noteNo"></div>
 
-  <div class="meta">
-    <div>得意先<br><span id="customerName"></span></div>
-    <div>担当者<br><span id="contactName"></span></div>
-    <div>電話<br><span id="phone"></span></div>
-    <div>納品日<br><span id="deliveryDate"></span></div>
-    <div style="grid-column:1/-1;">住所<br><span id="address"></span></div>
+    <div class="meta">
+      <div>得意先<br><span id="customerName"></span></div>
+      <div>担当者<br><span id="contactName"></span></div>
+      <div>電話<br><span id="phone"></span></div>
+      <div>納品日<br><span id="deliveryDate"></span></div>
+      <div style="grid-column:1/-1;">住所<br><span id="address"></span></div>
+    </div>
   </div>
-</div>
 
-<div class="card">
-  <h2>明細</h2>
+  <div class="card">
+    <h2>明細</h2>
 
-  <table>
-    <thead>
-      <tr>
-        <th>商品名</th>
-        <th>個数</th>
-      </tr>
-    </thead>
-    <tbody id="itemsTableBody"></tbody>
-  </table>
+    <table>
+      <thead>
+        <tr>
+          <th>商品名</th>
+          <th>個数</th>
+        </tr>
+      </thead>
+      <tbody id="itemsTableBody"></tbody>
+    </table>
 
-  <div id="signedInfo"></div>
-</div>
+    <div id="signedInfo" style="margin-top:10px;"></div>
+  </div>
 
-<div class="card sign-area" id="signArea">
-  <h2>受領サイン</h2>
+  <div class="card sign-area" id="signArea">
+    <h2>受領サイン</h2>
 
-  <input id="receivedBy" placeholder="受領者名">
-  <input id="signerName" placeholder="署名者名">
+    <input id="receivedBy" placeholder="受領者名">
+    <input id="signerName" placeholder="署名者名">
 
-  <canvas id="sigCanvas"></canvas>
+    <div class="canvas-wrap">
+      <canvas id="sigCanvas"></canvas>
+    </div>
 
-  <button onclick="submitSignature()">送信</button>
+    <div class="actions">
+      <button type="button" onclick="clearSignature()">サインを消す</button>
+      <button type="button" onclick="submitSignature()">送信</button>
+    </div>
 
-  <div id="msg"></div>
-</div>
+    <div id="msg"></div>
+  </div>
 
 </div>
 
@@ -142,76 +188,218 @@ let sigCanvas = null;
 let sigCtx = null;
 let drawing = false;
 let signedOnce = false;
+let lastPoint = null;
 
 function getToken(){
   return new URL(location.href).searchParams.get('token');
 }
 
+function showMsg(text){
+  document.getElementById('msg').textContent = text || '';
+}
+
 function renderHeader(note){
-  noteNo.textContent = note.delivery_note_no || '';
-  customerName.textContent = note.customer_name || '';
-  contactName.textContent = note.contact_name || '';
-  phone.textContent = note.phone || '';
-  deliveryDate.textContent = (note.delivery_date||'').slice(0,10);
-  address.textContent = [note.addr1,note.addr2].filter(Boolean).join(' ');
+  document.getElementById('noteNo').textContent = note.delivery_note_no || '';
+  document.getElementById('customerName').textContent = note.customer_name || '';
+  document.getElementById('contactName').textContent = note.contact_name || '';
+  document.getElementById('phone').textContent = note.phone || '';
+  document.getElementById('deliveryDate').textContent = (note.delivery_date || note.issue_date || '').slice(0,10);
+  document.getElementById('address').textContent =
+    [note.zip, note.pref, note.city, note.addr1, note.addr2].filter(Boolean).join(' ');
 }
 
 function renderItems(items){
-  itemsTableBody.innerHTML = items.map(i=>`
+  document.getElementById('itemsTableBody').innerHTML = items.map(i => `
     <tr>
-      <td>${i.product_name||''}</td>
-      <td class="num">${i.quantity||0}</td>
+      <td>${escapeHtml(i.product_name || '')}</td>
+      <td class="num">${Number(i.quantity || 0).toLocaleString('ja-JP')}</td>
     </tr>
   `).join('');
 }
 
+function renderReceipt(receipt){
+  if (!receipt) return;
+  document.getElementById('signedInfo').innerHTML = `
+    <div><strong>受領者:</strong> ${escapeHtml(receipt.received_by || '')}</div>
+    <div><strong>署名:</strong> ${escapeHtml(receipt.signer_name || '')}</div>
+    <div><strong>受領時刻:</strong> ${escapeHtml((receipt.received_at || '').replace('T',' ').slice(0,19))}</div>
+  `;
+  document.getElementById('signArea').style.display = 'none';
+}
+
+function escapeHtml(str){
+  return String(str)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#39;");
+}
+
 async function loadNote(){
   const token = getToken();
-  if(!token) return;
+  if (!token) {
+    showMsg('token がありません');
+    return;
+  }
 
-  const res = await fetch(`/api/dn/delivery-notes/view/${token}`);
-  const data = await res.json();
+  const res = await fetch(`/api/dn/delivery-notes/view/${encodeURIComponent(token)}`);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.ok) {
+    showMsg('納品書の取得に失敗しました');
+    return;
+  }
 
   noteData = data;
-  renderHeader(data.delivery_note);
-  renderItems(data.items||[]);
+  renderHeader(data.delivery_note || {});
+  renderItems(data.items || []);
+  renderReceipt(data.receipt);
+
+  if (data.delivery_note?.status === 'signed') {
+    document.getElementById('signArea').style.display = 'none';
+  }
+}
+
+function resizeCanvas(){
+  const ratio = window.devicePixelRatio || 1;
+  const rect = sigCanvas.getBoundingClientRect();
+
+  sigCanvas.width = Math.max(1, Math.floor(rect.width * ratio));
+  sigCanvas.height = Math.max(1, Math.floor(rect.height * ratio));
+
+  sigCtx.setTransform(1, 0, 0, 1, 0, 0);
+  sigCtx.scale(ratio, ratio);
+  sigCtx.lineWidth = 2;
+  sigCtx.lineCap = 'round';
+  sigCtx.lineJoin = 'round';
+  sigCtx.strokeStyle = '#000';
+}
+
+function getPointFromEvent(e){
+  const rect = sigCanvas.getBoundingClientRect();
+
+  if (e.touches && e.touches[0]) {
+    return {
+      x: e.touches[0].clientX - rect.left,
+      y: e.touches[0].clientY - rect.top
+    };
+  }
+
+  if (e.changedTouches && e.changedTouches[0]) {
+    return {
+      x: e.changedTouches[0].clientX - rect.left,
+      y: e.changedTouches[0].clientY - rect.top
+    };
+  }
+
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+}
+
+function startDraw(e){
+  e.preventDefault();
+  drawing = true;
+  signedOnce = true;
+  lastPoint = getPointFromEvent(e);
+
+  sigCtx.beginPath();
+  sigCtx.moveTo(lastPoint.x, lastPoint.y);
+}
+
+function moveDraw(e){
+  if (!drawing) return;
+  e.preventDefault();
+
+  const p = getPointFromEvent(e);
+  sigCtx.lineTo(p.x, p.y);
+  sigCtx.stroke();
+  lastPoint = p;
+}
+
+function endDraw(e){
+  if (!drawing) return;
+  e.preventDefault();
+  drawing = false;
+  lastPoint = null;
+}
+
+function clearSignature(){
+  sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+  signedOnce = false;
+  showMsg('');
+}
+
+async function submitSignature(){
+  if (!noteData?.delivery_note?.id) return;
+
+  const receivedBy = document.getElementById('receivedBy').value.trim();
+  const signerName = document.getElementById('signerName').value.trim();
+
+  if (!receivedBy) {
+    showMsg('受領者名を入力してください');
+    return;
+  }
+
+  if (!signerName) {
+    showMsg('署名者名を入力してください');
+    return;
+  }
+
+  if (!signedOnce) {
+    showMsg('サインしてください');
+    return;
+  }
+
+  try {
+    const dataUrl = sigCanvas.toDataURL('image/png');
+
+    const res = await fetch(`/api/dn/delivery-notes/${encodeURIComponent(noteData.delivery_note.id)}/sign`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        received_by: receivedBy,
+        signer_name: signerName,
+        signature_data_url: dataUrl
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'sign_failed');
+    }
+
+    showMsg('送信しました');
+    await loadNote();
+  } catch (err) {
+    console.error(err);
+    showMsg('送信失敗: ' + err.message);
+  }
 }
 
 function initCanvas(){
   sigCanvas = document.getElementById('sigCanvas');
   sigCtx = sigCanvas.getContext('2d');
 
-  sigCanvas.addEventListener('mousedown', ()=>drawing=true);
-  sigCanvas.addEventListener('mouseup', ()=>drawing=false);
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
 
-  sigCanvas.addEventListener('mousemove', e=>{
-    if(!drawing) return;
-    sigCtx.fillRect(e.offsetX,e.offsetY,2,2);
-    signedOnce=true;
-  });
-}
+  sigCanvas.addEventListener('mousedown', startDraw);
+  sigCanvas.addEventListener('mousemove', moveDraw);
+  sigCanvas.addEventListener('mouseup', endDraw);
+  sigCanvas.addEventListener('mouseleave', endDraw);
 
-async function submitSignature(){
-  if(!signedOnce) return alert('サインしてください');
-
-  const dataUrl = sigCanvas.toDataURL();
-
-  await fetch(`/api/dn/delivery-notes/${noteData.delivery_note.id}/sign`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      received_by: receivedBy.value,
-      signer_name: signerName.value,
-      signature_data_url: dataUrl
-    })
-  });
-
-  msg.textContent='送信しました';
+  sigCanvas.addEventListener('touchstart', startDraw, { passive:false });
+  sigCanvas.addEventListener('touchmove', moveDraw, { passive:false });
+  sigCanvas.addEventListener('touchend', endDraw, { passive:false });
+  sigCanvas.addEventListener('touchcancel', endDraw, { passive:false });
 }
 
 initCanvas();
 loadNote();
 </script>
-
 </body>
 </html>
